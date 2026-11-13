@@ -1,0 +1,2 @@
+# Optional local OCR runtime for scanned PDFs. Installed only inside Runtime/MinerU/venv.
+mineru==4.1.2

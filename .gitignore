@@ -1,0 +1,17 @@
+Contracts/
+Library.html
+Validation/
+Baseline*/
+.build/
+__pycache__/
+*.py[cod]
+Runtime/MinerU/
+Runtime/venv/
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.xml
+*.log
+*.pid

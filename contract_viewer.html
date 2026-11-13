@@ -1,0 +1,3742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Parsing for Easy Reading - Contract Viewer</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0d0f18;
+      --bg2:      #13151f;
+      --bg3:      #1a1d2e;
+      --border:   #252840;
+      --accent:   #5c73f2;
+      --accent2:  #7c3aed;
+      --green:    #10b981;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --text:     #e2e8f0;
+      --text2:    #94a3b8;
+      --text3:    #64748b;
+      --sidebar-w: 360px;
+      --reader-content-width: 88ch;
+      --header-h:  52px;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; font-size: 14px; overflow: hidden; }
+
+    /* ── Schedule Table ───────────────────────────────────────────────── */
+    .schedule-table {
+      width: max-content;   /* auto-size to content */
+      border-collapse: collapse; margin: 16px 0;
+      font-size: 12.5px; border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden;
+    }
+    .schedule-table th {
+      background: var(--bg3); color: var(--accent);
+      padding: 8px 12px; text-align: center;
+      font-weight: 600; font-size: 11.5px;
+      border-bottom: 1px solid var(--border);
+      max-width: 280px; min-width: 80px;
+      white-space: normal; overflow-wrap: break-word; word-break: normal;
+    }
+    .schedule-table td {
+      padding: 7px 12px; border-bottom: 1px solid rgba(37,40,64,.6);
+      color: var(--text); vertical-align: top; line-height: 1.5;
+      text-align: center;
+      max-width: 280px; min-width: 80px;
+      white-space: normal; overflow-wrap: break-word; word-break: normal;
+    }
+    .schedule-table tr:last-child td { border-bottom: none; }
+    .schedule-table tr:hover td { background: rgba(92,115,242,.06); }
+    .schedule-tables-wrap { margin-top: 8px; overflow-x: auto; }
+    /* ── Layout ───────────────────────────────────────────────────────── */
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Header */
+    #header {
+      height: var(--header-h); min-height: var(--header-h);
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0;
+    }
+    #header h1 { font-size: 15px; font-weight: 700; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #header .stats { display: flex; gap: 8px; flex-shrink: 0; }
+    .badge { padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+    .badge.accent { background: rgba(92,115,242,.15); border-color: var(--accent); color: var(--accent); }
+
+    /* Search bar */
+    #search-wrap { position: relative; flex-shrink: 0; }
+    #search { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 6px 12px 6px 32px; font-size: 13px; width: 220px;
+      outline: none; transition: border-color .2s; }
+    #search:focus { border-color: var(--accent); }
+    #search-wrap::before { content: '🔍'; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 12px; pointer-events: none; }
+
+    /* Body */
+    #body { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+    /* ── Sidebar (Split layout) ───────────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w); min-width: var(--sidebar-w);
+      background: var(--bg2); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+      height: 100%;
+    }
+
+    #sidebar-clauses {
+      flex: 0 0 calc(55% - 3px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-resizer {
+      height: 6px;
+      background: var(--bg2);
+      cursor: ns-resize;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+      z-index: 10;
+    }
+    #sidebar-resizer:hover, #sidebar-resizer.is-resizing {
+      background: #2a2e45;
+    }
+    .resizer-handle {
+      width: 32px;
+      height: 2px;
+      background: var(--text3);
+      border-radius: 2px;
+    }
+
+    #sidebar-definitions {
+      flex: 0 0 calc(45% - 3px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section-header {
+      padding: 10px 14px; font-size: 11px; font-weight: 700;
+      color: var(--text3); text-transform: uppercase; letter-spacing: .08em;
+      border-bottom: 1px solid var(--border); background: var(--bg2);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
+
+    #toc { flex: 1; overflow-y: auto; padding: 6px 0; }
+    #toc::-webkit-scrollbar { width: 4px; }
+    #toc::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Static TOC elements */
+    .toc-static-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px; cursor: pointer; transition: background .15s;
+      border-left: 3px solid transparent;
+    }
+    .toc-static-item:hover { background: var(--bg3); }
+    .toc-static-item.active { background: rgba(92,115,242,.12); border-left-color: var(--accent); color: var(--accent); }
+    .toc-static-item .toc-icon { font-size: 13px; color: var(--accent); }
+    .toc-static-item .toc-title { font-size: 12px; font-weight: 600; color: var(--text2); }
+    .toc-static-item.active .toc-title { color: var(--accent); }
+
+    /* TOC items */
+    .toc-item { cursor: pointer; padding: 0; }
+    .toc-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; transition: background .15s; border-left: 3px solid transparent;
+    }
+    .toc-row:hover { background: var(--bg3); }
+    .toc-row.active { background: rgba(92,115,242,.12); border-left-color: var(--accent); color: var(--accent); }
+    .toc-toggle { font-size: 10px; color: var(--text3); width: 12px; flex-shrink: 0; transition: transform .2s; }
+    .toc-toggle.open { transform: rotate(90deg); }
+    .toc-nc { font-size: 11px; font-weight: 700; color: var(--accent); min-width: 32px; flex-shrink: 0; }
+    .toc-title { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toc-row.active .toc-title { color: var(--accent); }
+
+    /* L3 sections inside article */
+    .toc-children { display: none; }
+    .toc-children.open { display: block; }
+    .toc-children .toc-row { padding-left: 30px; }
+    .toc-children .toc-nc { color: var(--text3); font-size: 10px; }
+
+    /* ── Main Content ─────────────────────────────────────────────────── */
+    #main { flex: 1; overflow-y: auto; padding: 28px 32px; position: relative; overflow-anchor: none; }
+    #main::-webkit-scrollbar { width: 6px; }
+    #main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Search results overlay */
+    #search-results { display: none; padding: 16px; }
+    #search-results.visible { display: block; }
+    .search-hit {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 16px; margin-bottom: 10px; cursor: pointer; transition: border-color .2s;
+    }
+    button.search-hit { display: block; width: 100%; text-align: left; color: inherit; font: inherit; }
+    .search-hit:hover { border-color: var(--accent); }
+    .search-hit-nc { font-size: 11px; color: var(--accent); font-weight: 700; }
+    .search-hit-title { font-size: 13px; font-weight: 600; margin: 4px 0; }
+    .search-hit-excerpt { font-size: 12px; color: var(--text2); line-height: 1.5; }
+    .search-hit mark { background: rgba(245,158,11,.3); color: var(--amber); border-radius: 2px; }
+
+    /* Welcome */
+    #welcome { text-align: center; padding: 80px 40px; color: var(--text3); }
+    #welcome h2 { font-size: 22px; color: var(--text2); margin-bottom: 10px; }
+
+    /* Clause card */
+    .clause-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 24px 28px; margin-bottom: 20px;
+    }
+    .clause-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+    .clause-nc { font-size: 12px; font-weight: 800; color: var(--accent); background: rgba(92,115,242,.12);
+      padding: 3px 10px; border-radius: 20px; flex-shrink: 0; }
+    .clause-title { font-size: 17px; font-weight: 700; color: var(--text); }
+    .clause-body { color: var(--text2); line-height: 1.75; font-size: 14px; }
+
+    /* Section within clause card */
+    .section-block {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px 20px; margin-top: 14px;
+    }
+    .section-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+    .section-nc { font-size: 11px; font-weight: 700; color: var(--text3); background: var(--bg);
+      padding: 2px 8px; border-radius: 12px; flex-shrink: 0; }
+    .section-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .section-body { color: var(--text2); line-height: 1.75; font-size: 13px; }
+
+    /* Named Item */
+    .named-items-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .named-item {
+      background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--green);
+      border-radius: 8px; padding: 12px 16px;
+    }
+    .named-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .named-item-label { font-size: 12px; font-weight: 700; color: var(--green); }
+    .named-item-nc { font-size: 10px; color: var(--text3); }
+    .named-item-body { font-size: 13px; color: var(--text2); line-height: 1.7; }
+
+    /* Alpha / Roman items */
+    .alpha-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .alpha-item { display: flex; gap: 10px; }
+    .alpha-letter { font-size: 12px; font-weight: 700; color: var(--amber); min-width: 24px; flex-shrink: 0; padding-top: 1px; }
+    .alpha-body { font-size: 13px; color: var(--text2); line-height: 1.7; }
+    .roman-list { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; padding-left: 16px; }
+    .roman-item { display: flex; gap: 8px; }
+    .roman-letter { font-size: 11px; font-weight: 700; color: var(--text3); min-width: 20px; }
+    .roman-body { font-size: 12px; color: var(--text2); line-height: 1.6; }
+    .level5-list { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; padding-left: 16px; }
+    .level5-item { display: flex; gap: 6px; }
+    .level5-letter { font-size: 11px; font-weight: 700; color: var(--text3); min-width: 18px; }
+    .level5-body { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+    /* Cross-references */
+    .refs-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .ref-chip {
+      font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+      background: rgba(124,58,237,.15); border: 1px solid rgba(124,58,237,.4);
+      color: #a78bfa; cursor: pointer; transition: all .15s;
+    }
+    .ref-chip:hover { background: rgba(124,58,237,.3); }
+
+    /* ── Definitions Panel (Nested inside sidebar) ───────────────────── */
+    #def-search-wrap { padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #def-search { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); padding: 5px 10px; font-size: 12px; outline: none; }
+    #def-search:focus { border-color: var(--accent); }
+    #def-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+    #def-list::-webkit-scrollbar { width: 4px; }
+    #def-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .def-item { padding: 10px 14px; border-bottom: 1px solid rgba(37,40,64,.6); cursor: pointer; transition: all .15s; border-left: 3px solid transparent; }
+    .def-item:hover { background: var(--bg3); }
+    .def-item.active { background: rgba(245,158,11,.12); border-left-color: var(--amber); }
+    .def-term { font-size: 12px; font-weight: 700; color: var(--amber); margin-bottom: 4px; }
+    .def-item.active .def-term { color: var(--amber); }
+    .def-body { font-size: 11px; color: var(--text2); line-height: 1.6; max-height: 80px; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+
+    /* ── Hover Preview Overlay ────────────────────────────────────────── */
+    #hover-preview {
+      position: absolute;
+      left: calc(var(--sidebar-w) + 12px);
+      width: 420px;
+      max-height: 340px;
+      background: rgba(26, 29, 46, 0.96);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(92, 115, 242, 0.35);
+      border-radius: 12px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.65);
+      padding: 16px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      pointer-events: none;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      opacity: 0;
+      transform: scale(0.97) translateY(5px);
+    }
+    #hover-preview::-webkit-scrollbar { width: 3px; }
+    #hover-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    #hover-preview.visible {
+      display: block;
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .preview-nc {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--accent);
+      background: rgba(92,115,242,.12);
+      padding: 2px 8px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .preview-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-left: 8px;
+      flex: 1;
+      text-align: right;
+    }
+    .preview-body {
+      font-size: 12.5px;
+      color: var(--text2);
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+
+    /* ── Inline Highlighted Terms & References ──────────────────────── */
+    .def-highlight { background: rgba(245,158,11,.1); color: var(--amber);
+      border-radius: 3px; padding: 0 2px; cursor: pointer; border-bottom: 1px dotted var(--amber); transition: all 0.15s; }
+    .def-highlight:hover { background: rgba(245,158,11,.25); text-shadow: 0 0 2px rgba(245,158,11,0.5); }
+
+    .ref-highlight {
+      color: var(--accent);
+      border-bottom: 1px dashed var(--accent);
+      cursor: pointer;
+      transition: all 0.15s;
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+    .ref-highlight:hover {
+      background: rgba(92, 115, 242, 0.15);
+      color: #8ab4f8;
+      border-bottom-style: solid;
+    }
+
+    /* ── Right slide-out detail drawer (push layout, no overlay) ─────── */
+    #right-drawer {
+      width: 360px;
+      min-width: 360px;
+      overflow: hidden;
+      background: var(--bg2);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      box-shadow: none;
+    }
+    #right-drawer:not(.open) #right-drawer-header,
+    #right-drawer:not(.open) #right-drawer-content { display: none; }
+    #right-drawer-empty {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: var(--text3);
+      font-size: 13px;
+      line-height: 1.6;
+      text-align: center;
+    }
+    #right-drawer.open #right-drawer-empty { display: none; }
+    #right-drawer-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg3);
+      flex-shrink: 0;
+    }
+    #right-drawer-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--amber);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    #right-drawer-close {
+      background: transparent;
+      border: 0;
+      color: var(--text3);
+      font-size: 22px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+      transition: color 0.15s;
+    }
+    #right-drawer-close:hover {
+      color: var(--red);
+    }
+    #right-drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    #right-drawer-content::-webkit-scrollbar { width: 4px; }
+    #right-drawer-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    
+    .drawer-def-term {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--amber);
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+    .drawer-def-body {
+      font-size: 13.5px;
+      color: var(--text2);
+      line-height: 1.75;
+      text-align: justify;
+      white-space: pre-line;
+    }
+    .ref-ambiguous { color: var(--amber); border-bottom: 1px dashed var(--amber); cursor: help; padding: 0 2px; border-radius: 3px; }
+    .ref-ambiguous:hover { background: rgba(245,158,11,.15); }
+    .named-items-grid { grid-template-columns: 1fr; }
+    .clause-body { white-space: pre-wrap; }
+    .source-pdf-link { color: var(--text2); border: 1px solid var(--border); padding: 5px 8px; border-radius: 6px; font-size: 11px; text-decoration: none; white-space: nowrap; }
+    .source-pdf-link:hover { color: var(--text); border-color: var(--accent); }
+    .ambiguity-note { color: var(--text2); font-size: 12px; line-height: 1.6; }
+    .ambiguity-candidate { display: flex; flex-direction: column; gap: 6px; width: 100%; margin: 8px 0; padding: 11px 12px; text-align: left; color: var(--text); background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+    .ambiguity-candidate:hover { border-color: var(--amber); background: rgba(245,158,11,.08); }
+    .ambiguity-candidate strong { color: var(--amber); }
+    .ambiguity-candidate span { color: var(--text2); line-height: 1.5; }
+
+    /* Enterprise AI UI standards: light-first tokens and contract-reader shell */
+    :root {
+      color-scheme: light;
+      --color-bg-page: #ffffff;
+      --color-bg-content: #eef1f5;
+      --color-bg-surface: #ffffff;
+      --color-bg-surface-alt-1: #f2f3f6;
+      --color-bg-surface-alt-2: #e2e4e9;
+      --color-bg-inverse: #1d1f24;
+      --color-text-strong: #000000;
+      --color-text-primary: #1c1c1c;
+      --color-text-secondary: #303030;
+      --color-text-muted: #737373;
+      --color-text-hint: #b0b0b0;
+      --color-text-disabled: #c4c4c4;
+      --color-text-inverse: #ebeced;
+      --color-action-primary: #0f6fff;
+      --color-action-primary-hover: #0e65e8;
+      --color-action-primary-active: #0b4fb5;
+      --color-action-secondary: #1d1f24;
+      --color-action-secondary-hover: #282b33;
+      --color-action-secondary-active: #333741;
+      --color-border-default: #e2e4e9;
+      --color-border-strong: #ccd0d6;
+      --color-divider-default: #e9ebef;
+      --color-status-success: #15b874;
+      --color-status-warning: #ffa833;
+      --color-status-danger: #e63b3b;
+      --color-overlay-scrim: rgba(29, 31, 36, 0.5);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-pill: 9999px;
+      --shadow-level-0: none;
+      --shadow-level-1: 0 1px 3px rgba(0, 0, 0, 0.06);
+      --shadow-level-2: 0 2px 8px rgba(0, 0, 0, 0.08);
+      --shadow-level-3: 0 4px 12px rgba(0, 0, 0, 0.12);
+      --bg: var(--color-bg-content);
+      --bg2: var(--color-bg-surface);
+      --bg3: var(--color-bg-surface-alt-1);
+      --border: var(--color-border-default);
+      --accent: var(--color-action-primary);
+      --accent2: var(--color-action-primary-hover);
+      --green: var(--color-status-success);
+      --amber: var(--color-status-warning);
+      --red: var(--color-status-danger);
+      --text: var(--color-text-primary);
+      --text2: var(--color-text-secondary);
+      --text3: var(--color-text-muted);
+      --sidebar-w: 320px;
+      --header-h: 64px;
+    }
+    html, body {
+      background: var(--color-bg-content);
+      color: var(--color-text-primary);
+      font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.5;
+    }
+    #header {
+      height: var(--header-h); min-height: var(--header-h); gap: 16px; padding: 0 24px;
+      background: var(--color-bg-page); border-bottom: 1px solid var(--color-border-default);
+      box-shadow: var(--shadow-level-0); z-index: 20;
+    }
+    #header h1 { min-width: 0; color: var(--color-text-primary); font-size: 20px; font-weight: 700; line-height: 1.3; letter-spacing: -0.02em; }
+    #header .stats { gap: 8px; }
+    .history-back-button {
+      min-height: 40px; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 8px 12px;
+      border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-bg-page);
+      color: var(--color-text-secondary); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .history-back-button:hover:not(:disabled) { color: var(--color-action-primary); border-color: var(--color-action-primary); background: rgba(15,111,255,.04); }
+    .history-back-button:disabled { color: var(--color-text-muted); cursor: default; opacity: .65; }
+    .history-back-button[hidden] { display: none !important; }
+    .history-back-button svg { width: 16px; height: 16px; flex: 0 0 16px; }
+    .badge {
+      padding: 4px 9px; border: 1px solid var(--color-border-default); border-radius: var(--radius-pill);
+      background: var(--color-bg-surface-alt-1); color: var(--color-text-secondary);
+      font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+    }
+    .badge.accent { background: rgba(15,111,255,.08); border-color: rgba(15,111,255,.24); color: var(--color-action-primary); }
+    #search-wrap { width: 280px; }
+    #search {
+      width: 100%; min-height: 40px; padding: 8px 12px 8px 38px; border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm); background: var(--color-bg-page); color: var(--color-text-primary);
+      font-family: inherit; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    #search::placeholder, #def-search::placeholder { color: var(--color-text-muted); opacity: 1; }
+    #search:focus, #def-search:focus { border-color: var(--color-action-primary); box-shadow: 0 0 0 3px rgba(15,111,255,.14); }
+    #search-wrap::before { content: none; }
+    .search-icon { position: absolute; top: 50%; left: 12px; width: 18px; height: 18px; color: var(--color-text-muted); transform: translateY(-50%); pointer-events: none; }
+    .source-pdf-link {
+      min-height: 40px; display: inline-flex; align-items: center; padding: 8px 12px;
+      border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-bg-page);
+      color: var(--color-text-secondary); font-size: 13px; font-weight: 600; text-decoration: none;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .source-pdf-link:hover { color: var(--color-action-primary); border-color: var(--color-action-primary); background: rgba(15,111,255,.04); }
+    #reading-width-control { position: relative; flex: 0 0 auto; }
+    #reading-width-toggle { display: inline-flex; min-height: 40px; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-bg-page); color: var(--color-text-secondary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    #reading-width-toggle:hover, #reading-width-toggle[aria-expanded="true"] { border-color: var(--color-action-primary); color: var(--color-action-primary); }
+    #reading-width-toggle svg { width: 18px; height: 18px; flex: 0 0 18px; }
+    #reading-width-popover { position: absolute; z-index: 120; top: calc(100% + 8px); right: 0; width: 290px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-level-2); color: var(--color-text-primary); }
+    #reading-width-popover[hidden] { display: none !important; }
+    .reading-width-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+    #reading-width-value { color: var(--color-action-primary); font-variant-numeric: tabular-nums; }
+    #reading-width-slider { display: block; width: 100%; margin: 8px 0 14px; accent-color: var(--color-action-primary); }
+    .reading-width-presets { display: flex; gap: 6px; }
+    .reading-width-preset { flex: 1; min-height: 34px; padding: 5px 7px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-page); color: var(--color-text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+    .reading-width-preset:hover, .reading-width-preset[aria-pressed="true"] { border-color: var(--color-action-primary); color: var(--color-action-primary); background: rgba(15,111,255,.06); }
+    #mobile-nav-toggle { display: none; }
+    #mobile-nav-scrim { display: none; }
+    #body { min-height: 0; background: var(--color-bg-content); }
+    #sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--color-bg-page); border-right: 1px solid var(--color-border-default); box-shadow: var(--shadow-level-0); }
+    .horizontal-panel-resizer {
+      display: flex; flex: 0 0 10px; width: 10px; align-items: center; justify-content: center;
+      position: relative; z-index: 12; background: transparent; cursor: col-resize; touch-action: none;
+    }
+    .horizontal-panel-resizer::after {
+      content: ""; width: 2px; height: 40px; border-radius: var(--radius-pill);
+      background: var(--color-border-strong); transition: width .12s, background .12s;
+    }
+    .horizontal-panel-resizer:hover { background: var(--color-bg-surface-alt-1); }
+    .horizontal-panel-resizer:hover::after, .horizontal-panel-resizer.is-active::after,
+    .horizontal-panel-resizer:focus-visible::after { width: 4px; background: var(--color-action-primary); }
+    #drawer-width-resizer { display: none; }
+    #drawer-width-resizer.is-visible { display: flex; }
+    body.is-resizing-panels { cursor: col-resize; user-select: none; }
+    body.is-resizing-panels #sidebar, body.is-resizing-panels #right-drawer { transition: none !important; }
+    .sidebar-section-header {
+      min-height: 44px; padding: 12px 16px 8px; background: var(--color-bg-page);
+      border-bottom: 1px solid var(--color-divider-default); color: var(--color-text-muted);
+      font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    }
+    #sidebar-resizer { background: var(--color-bg-page); border-color: var(--color-divider-default); }
+    #sidebar-resizer:hover, #sidebar-resizer.is-resizing { background: var(--color-bg-surface-alt-1); }
+    .resizer-handle { background: var(--color-border-strong); }
+    .toc-static-item, .toc-row { min-height: 48px; gap: 10px; padding-top: 10px; padding-bottom: 10px; transition: background .15s, border-color .15s, color .15s; }
+    .toc-static-item:hover, .toc-row:hover, .def-item:hover { background: var(--color-bg-surface-alt-1); }
+    .toc-static-item.active, .toc-row.active { background: rgba(15,111,255,.08); border-left-color: var(--color-action-primary); color: var(--color-action-primary); }
+    .toc-static-item .toc-title, .toc-title { color: var(--color-text-secondary); font-size: 13px; font-weight: 600; }
+    .toc-static-item.active .toc-title, .toc-row.active .toc-title { color: var(--color-action-primary); font-weight: 600; }
+    .toc-icon { width: 18px; height: 18px; display: inline-flex; flex: 0 0 18px; color: var(--color-text-muted); }
+    .toc-icon svg { width: 18px; height: 18px; }
+    .toc-toggle { color: var(--color-text-muted); font-size: 12px; }
+    .toc-nc { min-width: 40px; color: var(--color-action-primary); font-size: 12px; font-weight: 600; }
+    .toc-children .toc-row { min-height: 44px; padding-left: 30px; }
+    .toc-children .toc-nc { color: var(--color-text-muted); }
+    #def-search-wrap { padding: 12px; background: var(--color-bg-page); border-color: var(--color-divider-default); }
+    #def-search {
+      min-height: 40px; padding: 8px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm);
+      background: var(--color-bg-page); color: var(--color-text-primary); font-family: inherit; font-size: 14px;
+      outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    .def-item { padding: 12px 16px; border-bottom-color: var(--color-divider-default); }
+    .def-item.active { background: rgba(15,111,255,.08); border-left-color: var(--color-action-primary); }
+    .def-term, .def-item.active .def-term { color: var(--color-action-primary); font-size: 13px; font-weight: 600; }
+    .def-body { max-height: 84px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.55; }
+    .def-item mark { padding: 0 1px; border-radius: 2px; background: rgba(255,168,51,.3); color: var(--color-text-primary); }
+    .def-search-empty { padding: 14px 16px; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+    #main { min-width: 0; overflow-x: hidden; padding: 24px 32px; background: var(--color-bg-content); }
+    #clause-view { width: 100%; min-width: 0; }
+    #welcome { padding: 80px 32px; color: var(--color-text-muted); }
+    #welcome h2 { color: var(--color-text-primary); font-size: 22px; font-weight: 700; }
+    .clause-card {
+      width: 100%; max-width: 1200px; margin: 0 auto 12px; padding: 24px 28px; border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-level-0);
+    }
+    .clause-header { align-items: center; gap: 12px; margin-bottom: 16px; }
+    .clause-nc, .preview-nc {
+      padding: 4px 9px; border: 1px solid rgba(15,111,255,.2); border-radius: var(--radius-pill);
+      background: rgba(15,111,255,.08); color: var(--color-action-primary); font-size: 12px; font-weight: 600;
+    }
+    .clause-title { color: var(--color-text-primary); font-size: 18px; font-weight: 700; line-height: 1.4; }
+    .clause-body, .section-body, .named-item-body, .alpha-body, .roman-body, .level5-body {
+      color: var(--color-text-secondary); font-size: 15px; font-weight: 400; line-height: 1.7;
+    }
+    .section-block { margin-top: 16px; padding: 16px 18px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface-alt-1); }
+    .definitions-table-wrap { margin-top: 14px; overflow-x: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+    .definitions-table { width: 100%; border-collapse: collapse; color: var(--color-text-secondary); font-size: 14px; line-height: 1.65; }
+    .definitions-table thead th { padding: 11px 14px; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface-alt-1); color: var(--color-text-primary); font-weight: 600; text-align: left; }
+    .definitions-table tbody th, .definitions-table tbody td { padding: 12px 14px; border-bottom: 1px solid var(--color-divider-default); text-align: left; vertical-align: top; }
+    .definitions-table tbody tr:last-child th, .definitions-table tbody tr:last-child td { border-bottom: 0; }
+    .definitions-table tbody th { width: 240px; min-width: 180px; color: var(--color-text-primary); font-weight: 600; }
+    .definition-source-page { margin-left: 7px; color: var(--color-text-muted); font-size: 11px; font-weight: 400; white-space: nowrap; }
+    .definition-intro { margin-bottom: 6px; }
+    .definition-enumeration { margin: 7px 0 0; padding-left: 27px; list-style-type: lower-alpha; }
+    .definition-enumeration li { padding-left: 5px; margin-top: 6px; }
+    .definition-enumeration li::marker { color: var(--color-action-primary); font-weight: 600; }
+    .section-header { align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+    .section-nc { padding: 3px 8px; border-radius: 4px; background: var(--color-bg-surface-alt-2); color: var(--color-text-secondary); font-size: 12px; font-weight: 600; }
+    .section-title { color: var(--color-text-primary); font-size: 15px; font-weight: 600; line-height: 1.45; }
+    .named-items-grid { gap: 8px; margin-top: 12px; }
+    .named-item { padding: 12px 14px; border: 1px solid var(--color-border-default); border-left: 3px solid var(--color-action-primary); border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+    .named-item-label { color: var(--color-action-primary); font-size: 13px; font-weight: 600; }
+    .named-item-nc { color: var(--color-text-muted); font-size: 11px; }
+    .alpha-list { gap: 8px; }
+    .alpha-letter, .roman-letter, .level5-letter { color: var(--color-text-secondary); font-size: 12px; font-weight: 600; }
+    .roman-list, .level5-list { gap: 6px; }
+    .ref-chip {
+      padding: 5px 10px; border: 1px solid rgba(15,111,255,.2); border-radius: var(--radius-pill);
+      background: rgba(15,111,255,.06); color: var(--color-action-primary); font-size: 12px; font-weight: 600;
+    }
+    .ref-chip:hover { background: rgba(15,111,255,.12); }
+    .ref-highlight, .def-highlight { border-radius: 3px; color: var(--color-action-primary); border-bottom: 1px dashed currentColor; background: rgba(15,111,255,.06); cursor: pointer; text-decoration: none; transition: background .15s, color .15s; }
+    .ref-highlight:hover, .def-highlight:hover { background: rgba(15,111,255,.14); color: var(--color-action-primary-hover); }
+    .ref-ambiguous { color: var(--color-text-primary); background: rgba(255,168,51,.14); border-bottom: 1px dashed var(--color-status-warning); }
+    .ref-ambiguous:hover { background: rgba(255,168,51,.25); }
+    .search-hit { width: 100%; max-width: 1200px; margin: 0 auto 10px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+    .search-hit:hover { border-color: var(--color-action-primary); }
+    .search-hit-nc { color: var(--color-action-primary); font-size: 12px; font-weight: 600; }
+    .search-hit-title { color: var(--color-text-primary); font-size: 15px; font-weight: 600; }
+    .search-hit-excerpt { color: var(--color-text-secondary); font-size: 14px; }
+    .search-hit mark { border-radius: 3px; background: rgba(255,168,51,.24); color: var(--color-text-primary); }
+    .search-hit-kind { display: inline-flex; margin-left: 8px; padding: 2px 7px; border-radius: var(--radius-pill); background: var(--color-bg-surface-alt-2); color: var(--color-text-secondary); font-size: 10px; font-weight: 600; vertical-align: middle; }
+    .search-help { margin: 0 auto 14px; max-width: 1200px; color: var(--color-text-muted); font-size: 12px; }
+    .clause-outline { display: flex; flex-direction: column; gap: 12px; }
+    .clause-outline-heading { color: var(--color-text-primary); font-size: 18px; font-weight: 700; line-height: 1.4; }
+    .clause-outline-subtitle { margin-top: -7px; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+    #clause-outline-filter { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-page); color: var(--color-text-primary); font: inherit; }
+    .clause-outline-tree { display: flex; flex-direction: column; gap: 3px; }
+    .clause-outline-item { min-width: 0; }
+    .clause-outline-row { display: flex; align-items: stretch; gap: 4px; }
+    .clause-outline-link { display: flex; flex: 1; min-width: 0; align-items: flex-start; gap: 8px; padding: 9px 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); text-align: left; font: inherit; cursor: pointer; }
+    .clause-outline-link:hover { background: var(--color-bg-surface-alt-1); color: var(--color-text-primary); }
+    .clause-outline-link[aria-current="location"] { background: rgba(15,111,255,.1); color: var(--color-action-primary); font-weight: 600; }
+    .clause-outline-nc { flex: 0 0 auto; min-width: 42px; color: var(--color-text-muted); font-size: 12px; font-weight: 600; }
+    .clause-outline-title { min-width: 0; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+    .clause-outline-toggle { flex: 0 0 34px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); font: inherit; cursor: pointer; }
+    .clause-outline-toggle:hover { background: var(--color-bg-surface-alt-1); color: var(--color-text-primary); }
+    .clause-outline-children { margin-left: 12px; padding-left: 8px; border-left: 1px solid var(--color-divider-default); }
+    .clause-outline-empty { padding: 12px 4px; color: var(--color-text-muted); font-size: 13px; line-height: 1.5; }
+    #hover-preview {
+      position: fixed; width: min(420px, calc(100vw - 32px)); max-height: min(380px, calc(100vh - 32px)); padding: 16px;
+      border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface);
+      box-shadow: var(--shadow-level-2); backdrop-filter: none; color: var(--color-text-primary); z-index: 40;
+    }
+    .preview-header { border-color: var(--color-divider-default); }
+    .preview-title { color: var(--color-text-primary); font-size: 14px; font-weight: 600; }
+    .preview-body { color: var(--color-text-secondary); font-size: 14px; line-height: 1.6; }
+    #right-drawer { width: 360px; min-width: 360px; background: var(--color-bg-surface); border-left-color: var(--color-border-default); }
+    #right-drawer-empty { color: var(--color-text-muted); }
+    #right-drawer-header { padding: 16px 20px; background: var(--color-bg-surface); border-color: var(--color-divider-default); }
+    #right-drawer-title { color: var(--color-text-muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+    #right-drawer-close { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-sm); color: var(--color-text-muted); font-family: inherit; font-size: 20px; }
+    #right-drawer-close:hover { color: var(--color-text-primary); background: var(--color-bg-surface-alt-1); }
+    #right-drawer-content { padding: 20px; color: var(--color-text-secondary); }
+    .drawer-def-term { margin-bottom: 12px; color: var(--color-action-primary); font-size: 20px; font-weight: 700; line-height: 1.4; }
+    .drawer-def-body { color: var(--color-text-secondary); font-size: 15px; font-weight: 400; line-height: 1.7; text-align: left; }
+    .drawer-clause-preview { display: flex; flex-direction: column; gap: 12px; color: var(--color-text-secondary); }
+    .drawer-clause-preview-header { display: flex; align-items: flex-start; gap: 8px; }
+    .drawer-clause-preview-nc { flex: 0 0 auto; padding: 3px 8px; border-radius: var(--radius-pill); background: var(--color-bg-surface-alt-2); color: var(--color-action-primary); font-size: 12px; font-weight: 600; }
+    .drawer-clause-preview-title { color: var(--color-text-primary); font-size: 18px; font-weight: 700; line-height: 1.45; }
+    .drawer-clause-preview-body { color: var(--color-text-secondary); font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+    .drawer-clause-preview-body .drawer-clause-subsection { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-divider-default); }
+    .drawer-clause-subsection-title { margin-bottom: 5px; color: var(--color-text-primary); font-size: 13px; font-weight: 600; }
+    .drawer-open-clause { align-self: flex-start; margin-top: 4px; padding: 9px 13px; border: 1px solid var(--color-action-primary); border-radius: var(--radius-sm); background: var(--color-action-primary); color: #fff; font: inherit; cursor: pointer; }
+    .drawer-open-clause:hover { filter: brightness(1.08); }
+    .ambiguity-note { color: var(--color-text-secondary); font-size: 14px; line-height: 1.6; }
+    .ambiguity-candidate { margin: 8px 0; padding: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-primary); font-family: inherit; font-size: 14px; }
+    .ambiguity-candidate:hover { border-color: var(--color-status-warning); background: rgba(255,168,51,.08); }
+    .ambiguity-candidate strong { color: var(--color-text-primary); }
+    #annotations-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-secondary); font-size: 13px; cursor: pointer; white-space: nowrap; }
+    #annotations-toggle:hover, #annotations-toggle[aria-expanded="true"] { border-color: var(--color-action-primary); color: var(--color-text-primary); }
+    #annotation-count { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--color-bg-surface-alt-2); color: var(--color-action-primary); font-size: 11px; text-align: center; }
+    #selection-toolbar { position: fixed; z-index: 110; display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-level-2); }
+    #selection-toolbar[hidden], #annotation-dialog[hidden], #annotation-toast[hidden] { display: none !important; }
+    #selection-toolbar button, #selection-toolbar select { min-height: 34px; padding: 6px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface-alt-1); color: var(--color-text-primary); font-size: 13px; cursor: pointer; }
+    #selection-toolbar button:hover { border-color: var(--color-action-primary); }
+    #annotation-dialog { position: fixed; z-index: 130; inset: 0; display: grid; place-items: center; padding: 20px; background: var(--color-overlay-scrim); }
+    .annotation-dialog-card { width: min(520px, 100%); padding: 22px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-level-3); }
+    .annotation-dialog-card h2 { margin: 0 0 14px; color: var(--color-text-primary); font-size: 18px; }
+    #annotation-quote { max-height: 130px; overflow: auto; margin-bottom: 14px; padding: 12px; border-left: 3px solid var(--color-action-primary); background: var(--color-bg-surface-alt-1); color: var(--color-text-secondary); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #annotation-memo { width: 100%; min-height: 130px; resize: vertical; padding: 11px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-primary); font: inherit; line-height: 1.5; }
+    #annotation-memo:focus { outline: 2px solid rgba(15,111,255,.28); border-color: var(--color-action-primary); }
+    .annotation-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .annotation-dialog-actions button, .annotation-item-actions button { padding: 8px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface-alt-1); color: var(--color-text-primary); cursor: pointer; }
+    .annotation-dialog-actions button.primary { border-color: var(--color-action-primary); background: var(--color-action-primary); color: white; }
+    #annotation-list { display: flex; flex-direction: column; gap: 10px; }
+    .annotation-empty { padding: 14px; border: 1px dashed var(--color-border-default); border-radius: var(--radius-sm); color: var(--color-text-muted); line-height: 1.6; }
+    .annotation-item { padding: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+    .annotation-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--color-text-muted); font-size: 12px; }
+    .annotation-item-kind { color: var(--color-action-primary); font-weight: 600; }
+    .annotation-item-location { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .annotation-item-quote { margin: 0 0 8px; color: var(--color-text-primary); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .annotation-item-memo { margin: 0 0 10px; color: var(--color-text-secondary); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .annotation-item-actions { display: flex; justify-content: flex-end; gap: 6px; }
+    .annotation-item-actions button { padding: 5px 9px; font-size: 12px; }
+    .annotation-item-actions button:hover { border-color: var(--color-action-primary); }
+    .reader-user-highlight { border-radius: 2px; color: inherit; cursor: pointer; }
+    .reader-user-highlight[data-color="yellow"] { background: rgba(255,220,75,.48); box-shadow: inset 0 -1px 0 rgba(194,146,0,.35); }
+    .reader-user-highlight[data-color="green"] { background: rgba(91,213,150,.32); box-shadow: inset 0 -1px 0 rgba(28,140,83,.35); }
+    .reader-user-highlight[data-color="pink"] { background: rgba(255,135,170,.32); box-shadow: inset 0 -1px 0 rgba(191,67,111,.35); }
+    .reader-memo-anchor { border-bottom: 2px dotted var(--color-action-primary); background: rgba(15,111,255,.07); cursor: pointer; }
+    #annotation-toast { position: fixed; z-index: 140; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 10px 15px; border: 1px solid var(--color-border-default); border-radius: var(--radius-pill); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-level-2); }
+    #tts-status { position: fixed; z-index: 145; right: 24px; bottom: 24px; display: flex; max-width: min(520px, calc(100vw - 32px)); align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border: 1px solid var(--color-border-default); border-radius: var(--radius-pill); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-level-2); }
+    #tts-status[hidden], #google-tts-audio[hidden], #tts-status button[hidden] { display: none !important; }
+    #tts-status-message { font-size: 13px; line-height: 1.45; }
+    .tts-status-action { flex: 0 0 auto; min-height: 32px; padding: 5px 9px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-page); color: var(--color-text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+    .tts-status-action:hover { border-color: var(--color-action-primary); color: var(--color-action-primary); }
+    #annotation-dialog[hidden], #selection-toolbar[hidden], #annotation-toast[hidden] { display: none !important; }
+    .source-pdf-link[hidden] { display: none; }
+    .ambiguity-candidate span { color: var(--color-text-secondary); }
+    .preamble-frontmatter { margin-bottom: 16px; color: var(--color-text-secondary); font-size: 15px; line-height: 1.8; }
+    .preamble-paragraph { margin: 0 0 16px; color: var(--color-text-secondary); font-size: 15px; line-height: 1.8; }
+    .preamble-contents { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-divider-default); }
+    .preamble-contents-title { margin-bottom: 8px; color: var(--color-text-muted); font-size: 13px; font-weight: 600; letter-spacing: .04em; }
+    .preamble-toc-row { display: flex; gap: 12px; padding: 4px 0; color: var(--color-text-secondary); font-size: 14px; line-height: 1.5; }
+    .preamble-toc-id { min-width: 76px; color: var(--color-action-primary); font-weight: 600; }
+    :focus-visible { outline: 3px solid rgba(15,111,255,.42); outline-offset: 2px; }
+    .toc-static-item:focus-visible, .toc-row:focus-visible, .def-item:focus-visible,
+    .def-highlight:focus-visible, .ref-highlight:focus-visible, .ref-ambiguous:focus-visible,
+    .ref-chip:focus-visible, .ambiguity-candidate:focus-visible { position: relative; z-index: 1; }
+    /* Contract reading: preserve source text while improving line length and hierarchy. */
+    #main { padding: clamp(16px, 2vw, 30px); }
+    #clause-view { width: 100%; max-width: var(--reader-content-width); margin-inline: auto; }
+    .clause-card { max-width: none; margin-bottom: 18px; padding: clamp(18px, 2vw, 30px); }
+    .clause-title { line-height: 1.45; }
+    .clause-body, .section-body, .named-item-body, .alpha-body, .roman-body, .level5-body {
+      font-size: 1rem; line-height: 1.8; letter-spacing: .005em; text-align: left; overflow-wrap: break-word;
+    }
+    .section-block { padding: 18px 20px; background: #f8f9fb; }
+    .named-item { padding: 14px 16px; }
+    .alpha-list { gap: 12px; }
+    .definitions-table { font-size: .95rem; line-height: 1.8; }
+    .definitions-table tbody th, .definitions-table tbody td { padding: 14px 16px; }
+    .definition-enumeration li { margin-top: 8px; line-height: 1.75; }
+    .drawer-def-body, .drawer-clause-preview-body { font-size: 15px; line-height: 1.8; text-align: left; }
+    #hover-preview { pointer-events: auto; }
+    .preview-header { align-items: center; gap: 10px; }
+    .preview-title { text-align: left; }
+    .preview-dismiss {
+      flex: 0 0 auto; width: 30px; height: 30px; border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-secondary);
+      font: inherit; font-size: 18px; line-height: 1; cursor: pointer;
+    }
+    .preview-dismiss:hover { border-color: var(--color-action-primary); color: var(--color-action-primary); }
+    .ref-highlight:focus-visible, .ref-chip:focus-visible, .def-highlight:focus-visible { outline-offset: 3px; }
+    button, input { font-family: inherit; }
+    @media (max-width: 1100px) {
+      #header { gap: 12px; padding: 0 16px; }
+      #search-wrap { width: 220px; }
+      #header .stats { gap: 4px; }
+      .badge { padding: 4px 7px; }
+      #main { padding: 20px; }
+    }
+    @media (max-width: 900px) {
+      #drawer-width-resizer { display: none !important; }
+      #right-drawer { width: 0; min-width: 0; border-left-width: 0; }
+      #right-drawer.open { position: fixed; z-index: 90; inset: var(--header-h) 0 0 auto; width: min(400px, 100vw); min-width: 0; border-left-width: 1px; box-shadow: var(--shadow-level-3); }
+    }
+    @media (max-width: 760px) {
+      :root { --header-h: 60px; }
+      #header { gap: 10px; padding: 0 12px; }
+      #mobile-nav-toggle { display: inline-flex; width: 40px; height: 40px; flex: 0 0 40px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+      #mobile-nav-toggle:hover { background: var(--color-bg-surface-alt-1); }
+      #header h1 { font-size: 18px; }
+      #header .stats { display: none; }
+      #reading-width-toggle { width: 40px; justify-content: center; padding: 8px; font-size: 0; }
+      #reading-width-popover { position: fixed; top: calc(var(--header-h) + 8px); right: 12px; }
+      .history-back-button { min-height: 40px; padding: 8px; }
+      .history-back-label { display: none; }
+      .source-pdf-link { min-height: 40px; padding: 8px; font-size: 0; }
+      .source-pdf-link::after { content: "PDF"; font-size: 12px; }
+      #search-wrap { width: min(34vw, 220px); }
+      #search { min-height: 40px; padding-left: 34px; }
+      #sidebar { position: fixed; z-index: 70; top: var(--header-h); bottom: 0; left: 0; width: min(320px, calc(100vw - 48px)); min-width: 0; transform: translateX(-102%); transition: transform .22s ease; box-shadow: var(--shadow-level-0); }
+      body.mobile-nav-open #sidebar { transform: translateX(0); box-shadow: var(--shadow-level-3); }
+      #mobile-nav-scrim { display: none; position: fixed; inset: var(--header-h) 0 0; z-index: 60; border: 0; background: var(--color-overlay-scrim); }
+      body.mobile-nav-open #mobile-nav-scrim { display: block; }
+      #sidebar-resizer { cursor: default; }
+      #sidebar-width-resizer, #drawer-width-resizer { display: none !important; }
+      #main { padding: 16px 12px; }
+      .clause-card { margin-bottom: 8px; padding: 18px 16px; border-radius: var(--radius-sm); }
+      .clause-header { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+      .section-block { padding: 14px 12px; }
+      .definitions-table tbody th { width: 170px; min-width: 150px; }
+      #right-drawer.open { position: fixed; z-index: 90; inset: var(--header-h) 0 0 auto; width: min(400px, 100vw); min-width: 0; border-left-width: 1px; box-shadow: var(--shadow-level-3); }
+      #hover-preview { position: fixed !important; left: 16px !important; width: calc(100vw - 32px); }
+    }
+    @media (max-width: 480px) {
+      #header { gap: 6px; }
+      #header h1 { font-size: 16px; }
+      #reading-width-popover { width: min(290px, calc(100vw - 24px)); }
+      .source-pdf-link { font-size: 0; }
+      .source-pdf-link::after { content: "PDF"; font-size: 12px; }
+      #search-wrap { width: 34vw; }
+      #search { padding-right: 8px; font-size: 14px; }
+      #search::placeholder { color: transparent; }
+      #welcome { padding: 56px 16px; }
+    }
+    /* Enterprise UI pass: quieter controls, readable tables, and responsive search. */
+    #header { gap: 10px; }
+    #header h1 { min-width: 0; font-size: 20px; }
+    #header .header-utility {
+      position: relative; display: inline-flex; flex: 0 0 40px; align-items: center; justify-content: center;
+      width: 40px; height: 40px; min-height: 40px; padding: 0; border: 0;
+      border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary);
+      font-size: 0; text-decoration: none; box-shadow: none;
+    }
+    #header .header-utility:hover:not(:disabled), #header .header-utility[aria-expanded="true"] {
+      border: 0; background: var(--color-bg-surface-alt-1); color: var(--color-action-primary);
+    }
+    #header .header-utility[hidden] { display: none; }
+    #header .header-utility:disabled { color: var(--color-text-disabled); opacity: 1; }
+    #header .header-utility svg { flex: 0 0 24px; width: 24px; height: 24px; }
+    #history-back-button .history-back-label, #reading-width-toggle span, #source-pdf-link::after { display: none; content: none; }
+    #annotation-count {
+      position: absolute; top: 0; right: 0; min-width: 17px; height: 17px; padding: 0 3px;
+      border: 1px solid var(--color-bg-page); background: var(--color-action-primary); color: #fff;
+      font-size: 10px; font-weight: 600; line-height: 15px; font-variant-numeric: tabular-nums;
+    }
+    #search-wrap { width: min(26vw, 280px); }
+    .sidebar-stats {
+      display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; padding: 10px 14px;
+      border-bottom: 1px solid var(--color-divider-default); background: var(--color-bg-page);
+    }
+    .sidebar-stats .badge { border-radius: 4px; background: var(--color-bg-surface-alt-1); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .clause-body, .section-body, .named-item-body, .alpha-body, .roman-body, .level5-body {
+      color: var(--color-text-primary); font-size: 16px; line-height: 1.8;
+    }
+    .clause-title { font-size: 20px; }
+    .section-title { font-size: 16px; }
+    .definitions-table { font-size: 15px; line-height: 1.75; }
+    .schedule-tables-wrap { max-width: 100%; margin-top: 16px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); }
+    .schedule-table {
+      width: max-content; min-width: 100%; margin: 0; border: 0; border-collapse: separate;
+      border-spacing: 0; border-radius: 0; color: var(--color-text-primary); font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+    .schedule-table th {
+      min-width: 110px; padding: 12px 14px; border-right: 1px solid var(--color-divider-default);
+      border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface-alt-1);
+      color: var(--color-text-primary); font-size: 13px; font-weight: 600; text-align: left;
+    }
+    .schedule-table td {
+      min-width: 110px; padding: 12px 14px; border-right: 1px solid var(--color-divider-default);
+      border-bottom: 1px solid var(--color-divider-default); color: var(--color-text-primary);
+      font-size: 14px; line-height: 1.65; text-align: left;
+    }
+    .schedule-table th:last-child, .schedule-table td:last-child { border-right: 0; }
+    .schedule-table tbody tr:nth-child(even) td { background: var(--color-bg-surface-alt-1); }
+    .schedule-table tbody tr:hover td { background: rgba(15,111,255,.06); }
+    #right-drawer-empty {
+      flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 10px;
+      padding: 36px 24px; color: var(--color-text-muted); text-align: left;
+    }
+    #right-drawer-empty svg { width: 24px; height: 24px; color: var(--color-action-primary); }
+    #right-drawer-empty strong { color: var(--color-text-primary); font-size: 18px; font-weight: 700; }
+    #right-drawer-empty span { max-width: 26ch; font-size: 14px; line-height: 1.6; }
+    #reader-settings-control { position: relative; flex: 0 0 auto; }
+    #reader-settings-popover {
+      position: absolute; z-index: 120; top: calc(100% + 8px); right: 0; width: 320px;
+      padding: 18px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md);
+      background: var(--color-bg-surface); box-shadow: var(--shadow-level-2);
+    }
+    #reader-settings-popover[hidden] { display: none !important; }
+    #reader-settings-popover h2 { margin: 0 0 14px; color: var(--color-text-primary); font-size: 18px; font-weight: 700; }
+    #reader-settings-popover label { display: block; margin: 14px 0 6px; color: var(--color-text-secondary); font-size: 13px; font-weight: 600; }
+    #reader-settings-popover select {
+      width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm); background: var(--color-bg-page); color: var(--color-text-primary); font: inherit;
+    }
+    #reader-settings-popover p { margin: 14px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.5; }
+    #selection-toolbar { max-width: calc(100vw - 16px); flex-wrap: wrap; }
+    #selection-toolbar .selection-reading-action { border-color: var(--color-action-primary); background: var(--color-action-primary); color: #fff; font-weight: 600; }
+    #selection-toolbar .selection-reading-action:hover { background: var(--color-action-primary-hover); color: #fff; }
+    #selection-toolbar .selection-interpret-action { border-color: var(--color-action-primary); color: var(--color-action-primary); font-weight: 600; }
+    .interpretation-quote { margin: 0 0 18px; padding: 12px 14px; border-left: 3px solid var(--color-action-primary); background: var(--color-bg-surface-alt-1); color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .interpretation-level { display: inline-block; margin-bottom: 16px; padding: 4px 9px; border-radius: var(--radius-pill); background: var(--color-bg-surface-alt-1); color: var(--color-action-primary); font-size: 12px; font-weight: 600; }
+    .interpretation-section { padding: 16px 0; border-top: 1px solid var(--color-divider-default); }
+    .interpretation-section h3 { margin: 0 0 8px; color: var(--color-text-primary); font-size: 15px; font-weight: 700; }
+    .interpretation-section p { margin: 0; color: var(--color-text-secondary); font-size: 15px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .interpretation-terms { margin: 0; padding-left: 20px; color: var(--color-text-secondary); font-size: 14px; line-height: 1.65; }
+    .interpretation-terms li + li { margin-top: 6px; }
+    .interpretation-loading { color: var(--color-text-muted); font-size: 14px; line-height: 1.6; }
+    @media (max-width: 760px) {
+      :root { --header-h: 104px; }
+      #header { flex-wrap: wrap; align-content: center; gap: 6px; padding: 6px 12px; }
+      #header h1 { flex: 1 1 0; min-width: 48px; font-size: 16px; }
+      #search-wrap { order: 10; flex: 1 0 100%; width: 100%; }
+      #search { width: 100%; min-height: 38px; }
+      #search::placeholder { color: var(--color-text-muted); }
+      #reader-settings-popover { position: fixed; top: calc(var(--header-h) + 8px); right: 12px; width: min(320px, calc(100vw - 24px)); }
+    }
+    @media (max-width: 480px) {
+      #header .header-utility { flex-basis: 36px; width: 36px; height: 36px; min-height: 36px; }
+      #mobile-nav-toggle { width: 36px; height: 36px; flex-basis: 36px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <button id="mobile-nav-toggle" type="button" aria-label="Open contract navigation" aria-controls="sidebar" aria-expanded="false">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6.5h16M4 12h16M4 17.5h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    </button>
+    <button id="history-back-button" class="history-back-button header-utility" type="button" aria-label="Return to previous contract location" title="Return to previous location" hidden disabled>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 5 3 12l7 7M4 12h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="history-back-label">Back</span>
+    </button>
+    <h1 id="doc-title">Contract Viewer</h1>
+    <a id="source-pdf-link" class="source-pdf-link header-utility" aria-label="Open source PDF" title="Open source PDF" hidden target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3.5h7l4 4v13H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3.5v4h4M8.5 13h7M8.5 16.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+    <button id="annotations-toggle" class="header-utility" type="button" aria-label="Open saved highlights and memos" title="Highlights and memos" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 3.5h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H8l-4 2v-17a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 9h8M8 13h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span id="annotation-count">0</span>
+    </button>
+    <div id="reading-width-control">
+      <button id="reading-width-toggle" class="header-utility" type="button" aria-label="Adjust reading column width" aria-expanded="false" aria-controls="reading-width-popover" title="Adjust reading column width">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h16M4 12l4-4m-4 4 4 4m12-4-4-4m4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Text width</span>
+      </button>
+      <div id="reading-width-popover" hidden>
+        <div class="reading-width-label-row"><label for="reading-width-slider">Reading column width</label><output id="reading-width-value" for="reading-width-slider">88 ch</output></div>
+        <input id="reading-width-slider" type="range" min="52" max="220" step="2" value="88" aria-label="Reading column width" />
+        <div class="reading-width-presets" aria-label="Reading width presets">
+          <button type="button" class="reading-width-preset" data-reader-width="72">Narrow</button>
+          <button type="button" class="reading-width-preset" data-reader-width="88">Standard</button>
+          <button type="button" class="reading-width-preset" data-reader-width="132">Wide</button>
+          <button type="button" class="reading-width-preset" data-reader-width="200">Full</button>
+        </div>
+      </div>
+    </div>
+    <div id="reader-settings-control">
+      <button id="reader-settings-toggle" class="header-utility" type="button" aria-label="Reading and interpretation settings" aria-expanded="false" aria-controls="reader-settings-popover" title="Reading and interpretation settings">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.3a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6Z" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.7a7.8 7.8 0 0 0 0-3.4l1.4-1.1-1.7-3-1.8.6a7.6 7.6 0 0 0-2.9-1.7L14 3.2h-4l-.4 1.9a7.6 7.6 0 0 0-2.9 1.7l-1.8-.6-1.7 3 1.4 1.1a7.8 7.8 0 0 0 0 3.4l-1.4 1.1 1.7 3 1.8-.6a7.6 7.6 0 0 0 2.9 1.7l.4 1.9h4l.4-1.9a7.6 7.6 0 0 0 2.9-1.7l1.8.6 1.7-3-1.4-1.1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      </button>
+      <div id="reader-settings-popover" hidden>
+        <h2>Reading settings</h2>
+        <label for="interpretation-level">Interpretation level</label>
+        <select id="interpretation-level"><option value="beginner">Beginner · plain language</option><option value="intermediate">Intermediate · obligations and risks</option><option value="advanced">Advanced · detailed contract analysis</option></select>
+        <label for="speech-mode">Google voice</label>
+        <select id="speech-mode"><option value="fast">Fast · Gemini Flash-Lite TTS</option><option value="natural">Natural · Gemini Flash TTS</option></select>
+        <p>Only the text you choose is sent to Google when you select Read aloud or Explain. Right-click a selection to read it immediately.</p>
+      </div>
+    </div>
+    <div id="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" stroke="currentColor" stroke-width="1.7"/><path d="m15.5 15.5 4.2 4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <input id="search" type="text" aria-label="Search clauses and defined terms" placeholder="Search clauses, terms, schedules…" title="Search (Ctrl+K)" autocomplete="off"/>
+    </div>
+  </div>
+
+  <div id="body">
+
+    <!-- Sidebar with stacked sections -->
+    <div id="sidebar">
+      
+      <!-- Top Section: Clauses & Sections -->
+      <div id="sidebar-clauses">
+        <div class="sidebar-section-header">Clauses & Sections</div>
+        <div class="sidebar-stats" id="stats-bar" aria-label="Contract structure summary"></div>
+        <div id="toc">
+          <div class="toc-static-item" id="toc-preamble">
+            <span class="toc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3.8h7l4 4v12.4H7a2 2 0 0 1-2-2V5.8a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 4v4h4M8.5 12h7M8.5 15.5h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <span class="toc-title">Preamble (계약 전문)</span>
+          </div>
+          <div class="toc-static-item" id="toc-fulltext">
+            <span class="toc-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21V5.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 6h11M8.5 8.5h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <span class="toc-title">Full Contract (전체 본문)</span>
+          </div>
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 6px 14px;" />
+        </div>
+      </div>
+      
+      <!-- Resizer -->
+      <div id="sidebar-resizer">
+        <div class="resizer-handle"></div>
+      </div>
+      
+      <!-- Bottom Section: Definitions -->
+      <div id="sidebar-definitions">
+        <div class="sidebar-section-header">
+          <span>Definitions</span>
+          <span class="badge" id="def-count"></span>
+        </div>
+        <div id="def-search-wrap">
+          <input id="def-search" type="text" aria-label="Search defined terms and definition text" placeholder="Find a term or definition?"/>
+        </div>
+        <div id="def-list"></div>
+      </div>
+
+    </div>
+
+    <div id="sidebar-width-resizer" class="horizontal-panel-resizer" role="separator" aria-orientation="vertical" aria-label="Resize contract navigation panel" aria-controls="sidebar" aria-valuemin="240" aria-valuemax="520" aria-valuenow="320" tabindex="0"></div>
+
+    <button id="mobile-nav-scrim" type="button" aria-label="Close contract navigation" tabindex="-1"></button>
+
+    <!-- Main content -->
+    <div id="main">
+      <div id="welcome">
+        <h2>Select a clause from the left sidebar</h2>
+        <p>Click any Article, Section, or Definition to view its content here.</p>
+      </div>
+      <div id="search-results" aria-live="polite"></div>
+      <div id="clause-view"></div>
+    </div>
+
+    <!-- Fixed right preview column for Definitions and Linked Clauses -->
+    <div id="drawer-width-resizer" class="horizontal-panel-resizer" role="separator" aria-orientation="vertical" aria-label="Resize definition details panel" aria-controls="right-drawer" aria-valuemin="280" aria-valuemax="640" aria-valuenow="360" tabindex="0"></div>
+    <div id="right-drawer" role="region" aria-label="Linked clause and definition details">
+      <div id="right-drawer-empty" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21V5.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h8M8 13h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><strong>References</strong><span>Hover over a defined term or clause reference to preview it here.</span></div>
+      <div id="right-drawer-header">
+        <span id="right-drawer-title">Definition Detail</span>
+        <button id="right-drawer-close" type="button" aria-label="Close definition details" onclick="window.closeRightDrawer()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+      </div>
+      <div id="right-drawer-content"></div>
+    </div>
+
+    <!-- Floating Hover Preview (hidden by default) -->
+    <div id="hover-preview" role="region" aria-label="Context preview" aria-live="polite"></div>
+
+    <div id="selection-toolbar" role="toolbar" aria-label="Selected text actions" hidden>
+      <button type="button" class="selection-reading-action" data-selection-action="read">Read aloud</button>
+      <button type="button" class="selection-interpret-action" data-selection-action="interpret">Explain</button>
+      <select id="annotation-color" aria-label="Highlight color">
+        <option value="yellow">Yellow</option>
+        <option value="green">Green</option>
+        <option value="pink">Pink</option>
+      </select>
+      <button type="button" data-annotation-action="highlight">Highlight</button>
+      <button type="button" data-annotation-action="memo">Memo</button>
+    </div>
+
+    <div id="annotation-dialog" hidden>
+      <div class="annotation-dialog-card" role="dialog" aria-modal="true" aria-labelledby="annotation-dialog-title">
+        <h2 id="annotation-dialog-title">Add memo</h2>
+        <div id="annotation-quote"></div>
+        <textarea id="annotation-memo" aria-label="Memo text" placeholder="Write a memo for this passage..."></textarea>
+        <div class="annotation-dialog-actions">
+          <button type="button" id="annotation-cancel">Cancel</button>
+          <button type="button" id="annotation-save" class="primary">Save memo</button>
+        </div>
+      </div>
+    </div>
+    <audio id="google-tts-audio" hidden></audio>
+    <div id="tts-status" role="status" aria-live="polite" hidden>
+      <span id="tts-status-message"></span>
+      <button id="tts-play-button" class="tts-status-action" type="button" hidden>Play</button>
+      <button id="tts-stop-button" class="tts-status-action" type="button" hidden>Stop</button>
+      <button id="tts-close-button" class="tts-status-action" type="button" aria-label="Dismiss speech status"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+    </div>
+    <div id="annotation-toast" role="status" aria-live="polite" hidden></div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA  (injected by launcher.py)
+// ═══════════════════════════════════════════════════════════════════════════
+var embeddedData = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════════════
+(function () {
+  const D = embeddedData;
+  if (!D) { document.getElementById('welcome').innerHTML = '<h2>No data loaded</h2><p>Open via ContractViewer.exe</p>'; return; }
+
+  const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+  const mobileNavScrim = document.getElementById('mobile-nav-scrim');
+  const sidebarPanel = document.getElementById('sidebar');
+  const mainPanel = document.getElementById('main');
+  const historyBackButton = document.getElementById('history-back-button');
+  const navigationHistory = [];
+  const browserHistoryId = 'contract-viewer-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  let browserHistoryIndex = 0;
+  let currentViewState = { type: 'welcome', nc: null };
+  let searchReturnState = null;
+  let navigationRestoreSequence = 0;
+  let navigationRestoreCleanup = null;
+
+  function captureNavigationState(returnAnchor = null) {
+    if (currentViewState.type === 'search' && searchReturnState) return { ...searchReturnState };
+    const activeRow = document.querySelector('.toc-row.active');
+    const activeStatic = document.querySelector('.toc-static-item.active');
+    const clauseView = document.getElementById('clause-view');
+    const state = {
+      ...currentViewState,
+      nc: currentViewState.nc || (activeRow && activeRow.dataset.nc) || null,
+      activeStaticId: activeStatic ? activeStatic.id : null,
+      scrollTop: mainPanel ? mainPanel.scrollTop : 0,
+      viewScrollTop: clauseView ? clauseView.scrollTop : 0,
+      tocScrollTop: document.getElementById('toc')?.scrollTop || 0
+    };
+    if (returnAnchor && mainPanel?.contains(returnAnchor)) {
+      const path = [];
+      let cursor = returnAnchor;
+      while (cursor && cursor !== mainPanel) {
+        const parent = cursor.parentElement;
+        if (!parent) break;
+        path.unshift(Array.prototype.indexOf.call(parent.children, cursor));
+        cursor = parent;
+      }
+      if (cursor === mainPanel) {
+        state.scrollAnchorPath = path;
+        state.scrollAnchorOffset = returnAnchor.getBoundingClientRect().top - mainPanel.getBoundingClientRect().top;
+      }
+      if (returnAnchor.matches('.ref-chip, .ref-highlight')) {
+        const anchorNc = returnAnchor.dataset.nc || '';
+        const anchorText = returnAnchor.textContent.trim().replace(/\s+/g, ' ');
+        const matchingReferences = Array.from(document.querySelectorAll('#clause-view .ref-chip, #clause-view .ref-highlight'))
+          .filter(element => element.dataset.nc === anchorNc && element.textContent.trim().replace(/\s+/g, ' ') === anchorText);
+        state.scrollAnchorDescriptor = {
+          nc: anchorNc,
+          text: anchorText,
+          occurrence: Math.max(0, matchingReferences.indexOf(returnAnchor))
+        };
+      }
+    }
+    return state;
+  }
+
+  function syncNavigationHistoryButton() {
+    if (!historyBackButton) return;
+    const previous = navigationHistory[navigationHistory.length - 1];
+    const hasPrevious = browserHistoryIndex > 0 || Boolean(previous);
+    historyBackButton.hidden = !hasPrevious;
+    historyBackButton.disabled = !hasPrevious;
+    const destination = browserHistoryIndex > 0 ? null : previous && (previous.nc || (previous.type === 'preamble' ? 'Preamble' : previous.type === 'full' ? 'Full Contract' : 'previous location'));
+    const label = destination ? 'Return to ' + destination : 'Return to previous contract location';
+    historyBackButton.title = label;
+    historyBackButton.setAttribute('aria-label', label);
+  }
+
+  function initializeBrowserHistory() {
+    try {
+      window.history.replaceState({
+        contractViewerHistoryId: browserHistoryId,
+        index: 0,
+        navigation: captureNavigationState()
+      }, '');
+    } catch (error) {
+      browserHistoryIndex = 0;
+    }
+    syncNavigationHistoryButton();
+  }
+
+  function syncCurrentBrowserHistoryState() {
+    try {
+      window.history.replaceState({
+        contractViewerHistoryId: browserHistoryId,
+        index: browserHistoryIndex,
+        navigation: captureNavigationState()
+      }, '');
+    } catch (error) {
+      // Keep the in-viewer return control available if browser history is unavailable.
+    }
+    syncNavigationHistoryButton();
+  }
+
+  function syncCurrentBrowserHistoryStateWhenScrollSettles(expectedNc) {
+    let previousTop = mainPanel ? mainPanel.scrollTop : 0;
+    let stableFrames = 0;
+    const checkScroll = () => {
+      if (currentViewState.type !== 'full' || currentViewState.nc !== expectedNc) return;
+      const currentTop = mainPanel ? mainPanel.scrollTop : 0;
+      stableFrames = Math.abs(currentTop - previousTop) < 1 ? stableFrames + 1 : 0;
+      previousTop = currentTop;
+      if (stableFrames >= 3) {
+        syncCurrentBrowserHistoryState();
+        return;
+      }
+      window.requestAnimationFrame(checkScroll);
+    };
+    window.requestAnimationFrame(checkScroll);
+  }
+
+  initializeBrowserHistory();
+
+  function pushCurrentViewToHistory(returnAnchor = null) {
+    navigationRestoreSequence += 1;
+    const state = captureNavigationState(returnAnchor);
+    navigationHistory.push(state);
+    if (navigationHistory.length > 100) navigationHistory.shift();
+
+    const nextIndex = browserHistoryIndex + 1;
+    try {
+      // Store the location being left on its current entry so Back restores this exact view.
+      window.history.replaceState({
+        contractViewerHistoryId: browserHistoryId,
+        index: browserHistoryIndex,
+        navigation: state
+      }, '');
+      window.history.pushState({
+        contractViewerHistoryId: browserHistoryId,
+        index: nextIndex,
+        navigation: state
+      }, '');
+      browserHistoryIndex = nextIndex;
+    } catch (error) {
+      // The in-viewer history remains available as a fallback.
+    }
+    syncNavigationHistoryButton();
+  }
+
+  function restoreNavigationState(state) {
+    if (!state) return;
+    navigationRestoreSequence += 1;
+    searchReturnState = null;
+
+    if (state.type === 'full') {
+      showFullContract({ recordHistory: false });
+      if (state.nc) {
+        document.querySelectorAll('.toc-row').forEach(row => row.classList.toggle('active', row.dataset.nc === state.nc));
+        currentViewState = { type: 'full', nc: state.nc };
+        showClauseOutline(state.nc);
+      }
+    } else if (state.type === 'clause' && state.nc) {
+      showNC(state.nc, { recordHistory: false, forceClause: true, restoreScrollTop: state.scrollTop || 0 });
+    } else if (state.type === 'preamble') {
+      showPreamble({ recordHistory: false });
+    } else if (state.type === 'search' && state.query) {
+      runSearch(state.query);
+    } else if (state.type === 'welcome') {
+      currentViewState = { type: 'welcome', nc: null };
+      closeRightDrawer();
+      document.getElementById('clause-view').innerHTML = '';
+      document.getElementById('welcome').style.display = '';
+      document.querySelectorAll('.toc-row, .toc-static-item, .def-item').forEach(row => row.classList.remove('active'));
+    }
+
+    restoreNavigationPosition(state);
+    syncNavigationHistoryButton();
+  }
+
+  function restoreNavigationPosition(state) {
+    navigationRestoreCleanup?.();
+    const restoreId = ++navigationRestoreSequence;
+    const startedAt = performance.now();
+    let stableFrames = 0;
+    let previousScrollTop = null;
+    let firstFrame = true;
+    let restoreFinished = false;
+    let restoreTimer = null;
+    const main = document.getElementById('main');
+    const previousScrollBehavior = main?.style.scrollBehavior || '';
+    const previousOverflowAnchor = main?.style.overflowAnchor || '';
+    if (main) {
+      main.style.scrollBehavior = 'auto';
+      main.style.overflowAnchor = 'none';
+    }
+    const cleanup = () => {
+      if (restoreFinished) return;
+      restoreFinished = true;
+      if (restoreTimer) clearTimeout(restoreTimer);
+      if (main) {
+        main.style.scrollBehavior = previousScrollBehavior;
+        main.style.overflowAnchor = previousOverflowAnchor;
+      }
+      if (navigationRestoreCleanup === cleanup) navigationRestoreCleanup = null;
+    };
+    navigationRestoreCleanup = cleanup;
+    const finishRestore = () => {
+      cleanup();
+      syncCurrentBrowserHistoryState();
+    };
+    restoreTimer = setTimeout(() => {
+      if (restoreId === navigationRestoreSequence) finishRestore();
+      else cleanup();
+    }, 2000);
+
+    const resolveAnchor = (main, clauseView) => {
+      let anchor = null;
+      if (state.scrollAnchorDescriptor) {
+        const descriptor = state.scrollAnchorDescriptor;
+        const candidates = Array.from(clauseView?.querySelectorAll('.ref-chip, .ref-highlight') || [])
+          .filter(element => element.dataset.nc === descriptor.nc && element.textContent.trim().replace(/\s+/g, ' ') === descriptor.text);
+        anchor = candidates[descriptor.occurrence] || candidates[0] || null;
+      }
+      if (!anchor && Array.isArray(state.scrollAnchorPath)) {
+        anchor = main;
+        for (const childIndex of state.scrollAnchorPath) {
+          anchor = anchor?.children?.[childIndex] || null;
+          if (!anchor) break;
+        }
+      }
+      return anchor && main.contains(anchor) ? anchor : null;
+    };
+
+    const applyPosition = () => {
+      if (restoreFinished) return;
+      if (restoreId !== navigationRestoreSequence) { cleanup(); return; }
+      requestAnimationFrame(() => {
+        if (restoreFinished) return;
+        if (restoreId !== navigationRestoreSequence) { cleanup(); return; }
+        const main = document.getElementById('main');
+        const clauseView = document.getElementById('clause-view');
+        const toc = document.getElementById('toc');
+        const drawer = document.getElementById('right-drawer');
+        if (main) {
+          const anchor = resolveAnchor(main, clauseView);
+          if (firstFrame && Number.isFinite(state.scrollTop)) main.scrollTop = state.scrollTop;
+          if (anchor && Number.isFinite(state.scrollAnchorOffset)) {
+            const currentOffset = anchor.getBoundingClientRect().top - main.getBoundingClientRect().top;
+            const difference = currentOffset - state.scrollAnchorOffset;
+            if (Math.abs(difference) > 0.5) main.scrollTop += difference;
+            const restoredOffset = anchor.getBoundingClientRect().top - main.getBoundingClientRect().top;
+            stableFrames = Math.abs(restoredOffset - state.scrollAnchorOffset) <= 1 ? stableFrames + 1 : 0;
+          } else if (firstFrame) {
+            stableFrames = 1;
+          } else {
+            stableFrames = Math.abs(main.scrollTop - previousScrollTop) <= 0.5 ? stableFrames + 1 : 0;
+          }
+          previousScrollTop = main.scrollTop;
+        }
+        if (clauseView && Number.isFinite(state.viewScrollTop)) clauseView.scrollTop = state.viewScrollTop;
+        if (toc && Number.isFinite(state.tocScrollTop)) toc.scrollTop = state.tocScrollTop;
+        firstFrame = false;
+
+        const runningTransitions = drawer?.getAnimations?.().some(animation => animation.playState === 'running') || false;
+        if (stableFrames >= 3 && !runningTransitions || performance.now() - startedAt >= 1800) {
+          finishRestore();
+          return;
+        }
+        requestAnimationFrame(applyPosition);
+      });
+    };
+
+    // Track layout reflow until the drawer transition and the scroll position settle.
+    requestAnimationFrame(applyPosition);
+  }
+
+  function returnToPreviousLocation() {
+    if (browserHistoryIndex > 0) {
+      window.history.back();
+      return;
+    }
+    const previous = navigationHistory.pop();
+    if (!previous) return;
+    restoreNavigationState(previous);
+  }
+
+  window.addEventListener('popstate', event => {
+    const entry = event.state;
+    if (!entry || entry.contractViewerHistoryId !== browserHistoryId) return;
+
+    const previousIndex = browserHistoryIndex;
+    browserHistoryIndex = Number.isInteger(entry.index) ? entry.index : 0;
+    if (browserHistoryIndex < previousIndex && navigationHistory.length) navigationHistory.pop();
+    restoreNavigationState(entry.navigation);
+    syncNavigationHistoryButton();
+  });
+
+  if (historyBackButton) historyBackButton.addEventListener('click', returnToPreviousLocation);
+  function setMobileNavOpen(open) {
+    document.body.classList.toggle('mobile-nav-open', open);
+    if (mobileNavToggle) mobileNavToggle.setAttribute('aria-expanded', String(open));
+    if (mobileNavToggle) mobileNavToggle.setAttribute('aria-label', open ? 'Close contract navigation' : 'Open contract navigation');
+  }
+  if (mobileNavToggle) mobileNavToggle.addEventListener('click', () => setMobileNavOpen(!document.body.classList.contains('mobile-nav-open')));
+  if (mobileNavScrim) mobileNavScrim.addEventListener('click', () => setMobileNavOpen(false));
+  if (sidebarPanel) sidebarPanel.addEventListener('click', e => {
+    if (e.target.closest('.toc-static-item, .toc-row, .def-item') && window.matchMedia('(max-width: 760px)').matches) setMobileNavOpen(false);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.altKey && e.key === 'ArrowLeft' && (browserHistoryIndex > 0 || navigationHistory.length)) {
+      e.preventDefault();
+      returnToPreviousLocation();
+    }
+    if (e.key === 'Escape') {
+      setMobileNavOpen(false);
+      hidePreview(null, true);
+      const drawer = document.getElementById('right-drawer');
+      if (drawer && drawer.classList.contains('open') && window.closeRightDrawer) window.closeRightDrawer();
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-keyboard-action]')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
+  const keyboardActionSelector = '.toc-static-item, .toc-row, .def-item, .def-highlight, .ref-highlight, .ref-ambiguous, .ref-chip';
+  function prepareKeyboardActions(root) {
+    if (!root || root.nodeType !== 1) return;
+    const candidates = [];
+    if (root.matches(keyboardActionSelector)) candidates.push(root);
+    candidates.push(...root.querySelectorAll(keyboardActionSelector));
+    candidates.forEach(el => {
+      if (el.closest('button, a, input')) return;
+      el.dataset.keyboardAction = 'true';
+      if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+      if (!el.hasAttribute('role') && !el.classList.contains('toc-row')) el.setAttribute('role', 'button');
+    });
+  }
+  const keyboardObserver = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(prepareKeyboardActions)));
+  [sidebarPanel, document.getElementById('clause-view')].filter(Boolean).forEach(region => keyboardObserver.observe(region, { childList: true, subtree: true }));
+  prepareKeyboardActions(sidebarPanel);
+
+  const sidebarWidthResizer = document.getElementById('sidebar-width-resizer');
+  const drawerWidthResizer = document.getElementById('drawer-width-resizer');
+  const rightDrawerPanel = document.getElementById('right-drawer');
+  let sidebarPanelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 320;
+  let drawerPanelWidth = 360;
+  const isCompactLayout = () => window.matchMedia('(max-width: 760px)').matches;
+  const isDrawerOverlayLayout = () => window.matchMedia('(max-width: 900px)').matches;
+  const sidebarWidthBounds = () => {
+    const reserve = isDrawerOverlayLayout() ? 440 : drawerPanelWidth + 376;
+    return { min: 240, max: Math.max(240, Math.min(520, window.innerWidth - reserve)) };
+  };
+  const drawerWidthBounds = () => ({ min: 280, max: Math.max(280, Math.min(640, window.innerWidth - sidebarPanelWidth - 376)) });
+
+  function setSidebarPanelWidth(width) {
+    const bounds = sidebarWidthBounds();
+    sidebarPanelWidth = Math.max(bounds.min, Math.min(bounds.max, Math.round(width)));
+    document.documentElement.style.setProperty('--sidebar-w', `${sidebarPanelWidth}px`);
+    if (sidebarWidthResizer) {
+      sidebarWidthResizer.setAttribute('aria-valuenow', String(sidebarPanelWidth));
+      sidebarWidthResizer.setAttribute('aria-valuemin', String(bounds.min));
+      sidebarWidthResizer.setAttribute('aria-valuemax', String(bounds.max));
+    }
+    if (rightDrawerPanel && !isDrawerOverlayLayout()) {
+      setDrawerPanelWidth(drawerPanelWidth);
+    }
+    return sidebarPanelWidth;
+  }
+
+  function setDrawerPanelWidth(width) {
+    const bounds = drawerWidthBounds();
+    drawerPanelWidth = Math.max(bounds.min, Math.min(bounds.max, Math.round(width)));
+    if (drawerWidthResizer) {
+      drawerWidthResizer.setAttribute('aria-valuenow', String(drawerPanelWidth));
+      drawerWidthResizer.setAttribute('aria-valuemin', String(bounds.min));
+      drawerWidthResizer.setAttribute('aria-valuemax', String(bounds.max));
+    }
+    if (rightDrawerPanel && !isDrawerOverlayLayout()) {
+      rightDrawerPanel.style.width = `${drawerPanelWidth}px`;
+      rightDrawerPanel.style.minWidth = `${drawerPanelWidth}px`;
+    }
+    return drawerPanelWidth;
+  }
+
+  function syncDrawerWidthResizer() {
+    const canResize = Boolean(rightDrawerPanel) && !isDrawerOverlayLayout();
+    if (drawerWidthResizer) drawerWidthResizer.classList.toggle('is-visible', canResize);
+    if (canResize) {
+      setDrawerPanelWidth(drawerPanelWidth);
+    } else if (rightDrawerPanel) {
+      rightDrawerPanel.style.removeProperty('width');
+      rightDrawerPanel.style.removeProperty('min-width');
+    }
+  }
+
+  function attachPanelResizer(handle, getValue, setValue, getBounds, direction) {
+    if (!handle) return;
+    let active = false;
+    let startX = 0;
+    let startWidth = 0;
+    const finish = () => {
+      if (!active) return;
+      active = false;
+      handle.classList.remove('is-active');
+      document.body.classList.remove('is-resizing-panels');
+    };
+    handle.addEventListener('pointerdown', event => {
+      if (isCompactLayout() || (event.button !== undefined && event.button !== 0)) return;
+      active = true;
+      startX = event.clientX;
+      startWidth = getValue();
+      handle.classList.add('is-active');
+      document.body.classList.add('is-resizing-panels');
+      if (handle.setPointerCapture) handle.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    handle.addEventListener('pointermove', event => {
+      if (!active) return;
+      setValue(startWidth + (event.clientX - startX) * direction);
+    });
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+    handle.addEventListener('lostpointercapture', finish);
+    handle.addEventListener('keydown', event => {
+      const bounds = getBounds();
+      let next = null;
+      if (event.key === 'ArrowLeft') next = getValue() - 16 * direction;
+      if (event.key === 'ArrowRight') next = getValue() + 16 * direction;
+      if (event.key === 'Home') next = bounds.min;
+      if (event.key === 'End') next = bounds.max;
+      if (next === null) return;
+      event.preventDefault();
+      setValue(next);
+    });
+  }
+
+  attachPanelResizer(sidebarWidthResizer, () => sidebarPanelWidth, setSidebarPanelWidth, sidebarWidthBounds, 1);
+  attachPanelResizer(drawerWidthResizer, () => drawerPanelWidth, setDrawerPanelWidth, drawerWidthBounds, -1);
+  setSidebarPanelWidth(sidebarPanelWidth);
+  syncDrawerWidthResizer();
+  window.addEventListener('resize', () => {
+    setSidebarPanelWidth(sidebarPanelWidth);
+    syncDrawerWidthResizer();
+  });
+
+  const clauses   = D.clauses   || [];
+  const nc_index  = D.nc_index  || {};
+  const defs      = D.definitions || D.preamble_definitions || {};
+  const definitionSources = D._definition_sources || {};
+  const stats     = D._stats    || {};
+  const defTerms  = Object.keys(defs);
+  const duplicateRefs = D._duplicate_refs || {};
+
+  const readingWidthToggle = document.getElementById('reading-width-toggle');
+  const readingWidthPopover = document.getElementById('reading-width-popover');
+  const readingWidthSlider = document.getElementById('reading-width-slider');
+  const readingWidthValue = document.getElementById('reading-width-value');
+  const readingWidthStorageKey = 'parsing-for-easy-reading:width:' + normalizeSearchText(D.title || 'contract').replace(/[^a-z0-9]+/g, '-');
+
+  function applyReadingWidth(value, persist = false) {
+    const width = Math.max(52, Math.min(220, Math.round(Number(value) / 2) * 2));
+    document.documentElement.style.setProperty('--reader-content-width', `${width}ch`);
+    if (readingWidthSlider) readingWidthSlider.value = String(width);
+    if (readingWidthValue) readingWidthValue.textContent = `${width} ch`;
+    document.querySelectorAll('[data-reader-width]').forEach(button => {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.readerWidth) === width));
+    });
+    if (persist) {
+      try { window.localStorage.setItem(readingWidthStorageKey, String(width)); } catch (error) { /* Keep this session's setting. */ }
+    }
+    return width;
+  }
+
+  let savedReadingWidth = 88;
+  try {
+    const stored = Number(window.localStorage.getItem(readingWidthStorageKey));
+    if (Number.isFinite(stored) && stored >= 52 && stored <= 220) savedReadingWidth = stored;
+  } catch (error) { /* Local files may not expose browser storage. */ }
+  applyReadingWidth(savedReadingWidth);
+  readingWidthToggle?.addEventListener('click', () => {
+    const open = readingWidthPopover.hidden;
+    readingWidthPopover.hidden = !open;
+    readingWidthToggle.setAttribute('aria-expanded', String(open));
+    if (open) readingWidthSlider?.focus();
+  });
+  readingWidthSlider?.addEventListener('input', () => applyReadingWidth(readingWidthSlider.value, true));
+  document.querySelectorAll('[data-reader-width]').forEach(button => button.addEventListener('click', () => applyReadingWidth(button.dataset.readerWidth, true)));
+  document.addEventListener('click', event => {
+    if (readingWidthPopover && !readingWidthPopover.hidden && !event.target.closest('#reading-width-control')) {
+      readingWidthPopover.hidden = true;
+      readingWidthToggle?.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && readingWidthPopover && !readingWidthPopover.hidden) {
+      readingWidthPopover.hidden = true;
+      readingWidthToggle?.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  const readerSettingsKey = 'parsing-for-easy-reading:settings:v1';
+  const readerSettingsToggle = document.getElementById('reader-settings-toggle');
+  const readerSettingsPopover = document.getElementById('reader-settings-popover');
+  const interpretationLevelSelect = document.getElementById('interpretation-level');
+  const speechModeSelect = document.getElementById('speech-mode');
+  const readerSettings = { interpretationLevel: 'beginner', speechMode: 'fast' };
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(readerSettingsKey) || '{}');
+    if (['beginner', 'intermediate', 'advanced'].includes(saved.interpretationLevel)) readerSettings.interpretationLevel = saved.interpretationLevel;
+    if (['fast', 'natural'].includes(saved.speechMode)) readerSettings.speechMode = saved.speechMode;
+  } catch (_) { /* Keep defaults when storage is unavailable. */ }
+  interpretationLevelSelect.value = readerSettings.interpretationLevel;
+  speechModeSelect.value = readerSettings.speechMode;
+  function saveReaderSettings() {
+    readerSettings.interpretationLevel = interpretationLevelSelect.value;
+    readerSettings.speechMode = speechModeSelect.value;
+    try { window.localStorage.setItem(readerSettingsKey, JSON.stringify(readerSettings)); } catch (_) { /* Session setting still works. */ }
+  }
+  interpretationLevelSelect.addEventListener('change', saveReaderSettings);
+  speechModeSelect.addEventListener('change', saveReaderSettings);
+  readerSettingsToggle?.addEventListener('click', () => {
+    const open = readerSettingsPopover.hidden;
+    readerSettingsPopover.hidden = !open;
+    readerSettingsToggle.setAttribute('aria-expanded', String(open));
+    if (open) {
+      readingWidthPopover.hidden = true;
+      readingWidthToggle?.setAttribute('aria-expanded', 'false');
+      interpretationLevelSelect.focus();
+    }
+  });
+  document.addEventListener('click', event => {
+    if (readerSettingsPopover && !readerSettingsPopover.hidden && !event.target.closest('#reader-settings-control')) {
+      readerSettingsPopover.hidden = true;
+      readerSettingsToggle?.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && readerSettingsPopover && !readerSettingsPopover.hidden) {
+      readerSettingsPopover.hidden = true;
+      readerSettingsToggle?.setAttribute('aria-expanded', 'false');
+      readerSettingsToggle?.focus();
+    }
+  });
+
+  const clauseOutlineChildren = new Map();
+  Object.values(nc_index).forEach(node => {
+    if (!node || !node.nc || !node.parent_nc) return;
+    if (!clauseOutlineChildren.has(node.parent_nc)) clauseOutlineChildren.set(node.parent_nc, []);
+    clauseOutlineChildren.get(node.parent_nc).push(node);
+  });
+  const compareClauseNodes = (a, b) => String(a.nc).localeCompare(String(b.nc), undefined, { numeric: true, sensitivity: 'base' });
+  clauseOutlineChildren.forEach(children => children.sort(compareClauseNodes));
+
+  function normalizeSearchText(value) {
+    return String(value || '').normalize('NFKC').toLocaleLowerCase().replace(/[\u2018\u2019\u201c\u201d]/g, "'").replace(/[\u2010-\u2015]/g, '-').replace(/\s+/g, ' ').trim();
+  }
+
+  function collectSearchStrings(value, output, key = '') {
+    if (typeof value === 'string') {
+      if (!/^(?:source_page|source_pages|source_scope|nc|parent_nc|id|display_nc)$/i.test(key)) output.push(value.replace(/<[^>]*>/g, ' '));
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(item => collectSearchStrings(item, output, key));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([childKey, childValue]) => collectSearchStrings(childValue, output, childKey));
+    }
+  }
+
+  const contractSearchIndex = [];
+  Object.entries(nc_index).forEach(([key, node]) => {
+    if (!node) return;
+    const parts = [];
+    collectSearchStrings(node, parts);
+    const title = String(node.title || node.id || key);
+    const body = parts.join(' ').replace(/\s+/g, ' ').trim();
+    contractSearchIndex.push({ type: 'clause', nc: key, node, title, body, searchable: normalizeSearchText(`${key} ${node.id || ''} ${title} ${body}`) });
+  });
+  Object.entries(defs).forEach(([term, definition]) => {
+    const body = String(definition || '');
+    contractSearchIndex.push({ type: 'definition', term, title: term, body, searchable: normalizeSearchText(`${term} ${body}`) });
+  });
+  if (D.preamble) {
+    const body = typeof D.preamble === 'string' ? D.preamble : JSON.stringify(D.preamble);
+    contractSearchIndex.push({ type: 'preamble', title: 'Preamble', body, searchable: normalizeSearchText(`Preamble ${body}`) });
+  }
+
+  function getClauseOutlineRoot(nc) {
+    let node = nc_index[nc];
+    if (!node) return null;
+    const seen = new Set();
+    while (node.parent_nc && nc_index[node.parent_nc] && !seen.has(node.nc)) {
+      seen.add(node.nc);
+      node = nc_index[node.parent_nc];
+    }
+    return node;
+  }
+
+  function renderClauseOutlineNode(node, activeNc, activePath, depth = 0) {
+    const children = clauseOutlineChildren.get(node.nc) || [];
+    const expanded = depth === 0 || activePath.has(node.nc);
+    const displayId = node.display_nc || node.id || node.nc;
+    const title = stripArticle(node.title || '', node.id || node.nc) || node.title || node.id || node.nc;
+    const childMarkup = children.length
+      ? `<button type="button" class="clause-outline-toggle" data-outline-toggle="${esc(node.nc)}" aria-label="${expanded ? 'Collapse' : 'Expand'} ${esc(displayId)} sections" aria-expanded="${expanded}">${expanded ? '−' : '+'}</button>`
+      : '';
+    const nested = children.length
+      ? `<div class="clause-outline-children" data-outline-children-for="${esc(node.nc)}"${expanded ? '' : ' hidden'}>${children.map(child => renderClauseOutlineNode(child, activeNc, activePath, depth + 1)).join('')}</div>`
+      : '';
+    return `<div class="clause-outline-item" data-outline-item="${esc(node.nc)}">
+      <div class="clause-outline-row" style="padding-left:${Math.min(depth, 8) * 8}px">
+        <button type="button" class="clause-outline-link" data-outline-nc="${esc(node.nc)}"${node.nc === activeNc ? ' aria-current="location"' : ''}>
+          <span class="clause-outline-nc">${esc(displayId)}</span><span class="clause-outline-title">${esc(title)}</span>
+        </button>${childMarkup}
+      </div>${nested}
+    </div>`;
+  }
+
+  function showClauseOutline(nc) {
+    const root = getClauseOutlineRoot(nc);
+    if (!root) return;
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+    const path = new Set();
+    let cursor = nc_index[nc];
+    while (cursor) {
+      path.add(cursor.nc);
+      cursor = cursor.parent_nc ? nc_index[cursor.parent_nc] : null;
+    }
+    const children = clauseOutlineChildren.get(root.nc) || [];
+    const tree = children.length
+      ? children.map(child => renderClauseOutlineNode(child, nc, path, 1)).join('')
+      : '<div class="clause-outline-empty">No separately numbered sections are indexed under this heading.</div>';
+    document.getElementById('right-drawer-title').textContent = 'Clause Sections';
+    content.innerHTML = `<div class="clause-outline" data-outline-root="${esc(root.nc)}">
+      <div class="clause-outline-heading">${esc(root.display_nc || root.id || root.nc)} ${esc(stripArticle(root.title || '', root.id || root.nc))}</div>
+      <div class="clause-outline-subtitle">Select a section to open it in the reading pane. Expand or collapse nested provisions as needed.</div>
+      <input id="clause-outline-filter" type="search" aria-label="Filter sections in this clause" placeholder="Filter these sections…" autocomplete="off" />
+      <div class="clause-outline-tree">${tree}</div>
+    </div>`;
+    rightDrawerMode = 'clause-outline';
+    activeClausePreviewNc = '';
+    _lastDefTerm = null;
+    drawer.classList.add('open');
+    syncDrawerWidthResizer();
+    content.querySelectorAll('[data-outline-nc]').forEach(button => button.addEventListener('click', () => showNC(button.dataset.outlineNc)));
+    content.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', () => {
+      const group = content.querySelector(`[data-outline-children-for="${CSS.escape(button.dataset.outlineToggle)}"]`);
+      if (!group) return;
+      const expanded = button.getAttribute('aria-expanded') !== 'true';
+      button.setAttribute('aria-expanded', String(expanded));
+      button.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${button.dataset.outlineToggle} sections`);
+      button.textContent = expanded ? '−' : '+';
+      group.hidden = !expanded;
+    }));
+    const filter = content.querySelector('#clause-outline-filter');
+    filter?.addEventListener('input', () => {
+      const q = normalizeSearchText(filter.value);
+      const items = Array.from(content.querySelectorAll('.clause-outline-item')).reverse();
+      items.forEach(item => {
+        const ownText = normalizeSearchText(item.querySelector(':scope > .clause-outline-row')?.textContent || '');
+        const nested = item.querySelector(':scope > .clause-outline-children');
+        const visibleChild = nested && Array.from(nested.children).some(child => child.hidden === false || child.dataset.filterMatch === 'true');
+        const match = !q || ownText.includes(q) || Boolean(visibleChild);
+        item.hidden = !match;
+        item.dataset.filterMatch = String(match);
+        if (nested && q && visibleChild) nested.hidden = false;
+      });
+    });
+  }
+
+  // Expose to window for inline click triggers
+  window.showDefinition = showDefinition;
+  window.showNC = showNC;
+  window.closeRightDrawer = closeRightDrawer;
+
+  // ── Header ─────────────────────────────────────────────────────────────
+  document.title = D.title || 'Parsing for Easy Reading - Contract Viewer';
+  document.getElementById('doc-title').textContent = D.title || 'Parsing for Easy Reading';
+  const sourcePdfLink = document.getElementById('source-pdf-link');
+  if (sourcePdfLink && D.source_file) { sourcePdfLink.href = encodeURI(D.source_file); sourcePdfLink.hidden = false; }
+
+  const statsBar = document.getElementById('stats-bar');
+  [
+    ['Articles', stats.clauses   || clauses.length],
+    ['Sections', stats.sections  || 0],
+    ['Defs',     defTerms.length],
+  ].forEach(([k, v]) => {
+    const b = document.createElement('span');
+    b.className = 'badge' + (k === 'Articles' ? ' accent' : '');
+    b.textContent = `${v} ${k}`;
+    statsBar.appendChild(b);
+  });
+
+  const parseWarnings = Array.isArray(D._parse_warnings) ? D._parse_warnings : [];
+  if (parseWarnings.length) {
+    const warningBadge = document.createElement('span');
+    warningBadge.className = 'badge';
+    warningBadge.textContent = (D._warning_badge || 'Clause structure incomplete').replace(String.fromCharCode(0x26a0), '').replace(String.fromCharCode(0xfe0f), '').trim();
+    warningBadge.title = parseWarnings.join('\n');
+    warningBadge.style.background = 'rgba(255,168,51,.16)';
+    warningBadge.style.borderColor = 'var(--color-status-warning)';
+    warningBadge.style.color = 'var(--color-text-primary)';
+    statsBar.appendChild(warningBadge);
+  }
+
+  // ── Hover Preview Handler ──────────────────────────────────────────────
+  const previewEl = document.getElementById('hover-preview');
+  let previewHovered = false;
+  let previewFocused = false;
+  
+  function showPreview(e, title, nc, content, type = 'clause') {
+    const trigger = e.currentTarget && e.currentTarget.id === 'main'
+      ? (e.target.closest('.ref-chip, .ref-highlight, .ref-ambiguous, .def-highlight') || e.target)
+      : e.currentTarget;
+    const rect = trigger.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+
+    let html = '';
+    if (type === 'clause') {
+      html = `
+        <div class="preview-header">
+          <span class="preview-nc">${esc(nc)}</span>
+          <span class="preview-title">${esc(title)}</span>
+        </div>
+        <div class="preview-body">${content ? formatContractText(content.slice(0, 450), []) + (content.length > 450 ? '...' : '') : '<span style="color:var(--text3)">No direct text. Click to view nested sections.</span>'}</div>
+      `;
+    } else if (type === 'definition') {
+      html = `
+        <div class="preview-header">
+          <span class="preview-nc">Definition</span>
+          <span class="preview-title">${esc(title)}</span>
+        </div>
+        <div class="preview-body">${formatDefinitionText(content.slice(0, 450), []) + (content.length > 450 ? '...' : '')}</div>
+      `;
+    } else if (type === 'static') {
+      html = `
+        <div class="preview-header">
+          <span class="preview-nc">Doc</span>
+          <span class="preview-title">${esc(title)}</span>
+        </div>
+        <div class="preview-body">${content}</div>
+      `;
+    }
+    
+    previewEl.innerHTML = html;
+    const previewHeader = previewEl.querySelector('.preview-header');
+    if (previewHeader) {
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.className = 'preview-dismiss';
+      dismiss.dataset.dismissPreview = 'true';
+      dismiss.setAttribute('aria-label', 'Dismiss preview');
+      dismiss.textContent = '×';
+      previewHeader.appendChild(dismiss);
+    }
+    previewEl.style.display = 'block';
+    const previewHeight = previewEl.offsetHeight || 220;
+    const previewWidth = previewEl.offsetWidth || 420;
+    const sidebarWidth = window.matchMedia('(max-width: 760px)').matches
+      ? 16
+      : (document.getElementById('sidebar')?.getBoundingClientRect().right || 320) + 12;
+    const maxLeft = Math.max(16, window.innerWidth - previewWidth - 16);
+    const left = Math.max(16, Math.min(sidebarWidth, maxLeft));
+    previewEl.style.left = `${left}px`;
+    let top = rect.top;
+    if (top + previewHeight > viewportHeight - 16) top = viewportHeight - previewHeight - 16;
+    previewEl.style.top = `${Math.max(16, top)}px`;
+    
+    // Allow thread to trigger transition
+    setTimeout(() => {
+      previewEl.classList.add('visible');
+    }, 10);
+  }
+  
+  function hidePreview(event = null, force = false) {
+    if (!force && (previewHovered || previewFocused || previewEl?.contains(event?.relatedTarget))) return;
+    if (force) { previewHovered = false; previewFocused = false; }
+    previewEl.classList.remove('visible');
+    setTimeout(() => {
+      if (!previewEl.classList.contains('visible')) {
+        previewEl.style.display = 'none';
+      }
+    }, 150);
+  }
+
+  previewEl?.addEventListener('mouseenter', () => { previewHovered = true; });
+  previewEl?.addEventListener('mouseleave', () => { previewHovered = false; hidePreview(); });
+  previewEl?.addEventListener('focusin', () => { previewFocused = true; });
+  previewEl?.addEventListener('focusout', event => {
+    if (previewEl.contains(event.relatedTarget)) return;
+    previewFocused = false;
+    hidePreview();
+  });
+  previewEl?.addEventListener('click', event => {
+    if (event.target.closest('[data-dismiss-preview]')) hidePreview(null, true);
+  });
+
+  // ── Event Delegation on Main Pane for Click & Hover Previews ──────────
+  const mainContainer = document.getElementById('main');
+
+  // User highlights and memos are stored locally per source document.
+  const annotationIdentity = D._source_metadata?.source_sha256 || D.source_file || D.title || location.pathname;
+  const annotationStorageKey = `parsing-easy-reading:annotations:v1:${annotationIdentity}`;
+  const annotationsToggle = document.getElementById('annotations-toggle');
+  const annotationsCount = document.getElementById('annotation-count');
+  const selectionToolbar = document.getElementById('selection-toolbar');
+  const annotationDialog = document.getElementById('annotation-dialog');
+  const annotationMemoInput = document.getElementById('annotation-memo');
+  const annotationToast = document.getElementById('annotation-toast');
+  let readerAnnotations = [];
+  let pendingSelectionDraft = null;
+  let pendingMemoDraft = null;
+  let annotationToastTimer = null;
+  let annotationStorageAvailable = true;
+  let rightDrawerMode = 'none';
+  let activeClausePreviewNc = '';
+  let clauseRefHovered = false;
+  let clauseDrawerHovered = false;
+  let clauseRefFocused = false;
+  let clauseDrawerFocused = false;
+  let clausePreviewCloseTimer = null;
+  let activeClausePreviewOrigin = null;
+  let activeDefinitionPreviewTerm = '';
+
+  try {
+    const saved = localStorage.getItem(annotationStorageKey);
+    const parsed = saved ? JSON.parse(saved) : [];
+    readerAnnotations = Array.isArray(parsed) ? parsed.filter(item => item && item.id && item.anchorId && item.quote) : [];
+  } catch (_) {
+    annotationStorageAvailable = false;
+  }
+  updateAnnotationCount();
+
+  function updateAnnotationCount() {
+    if (annotationsCount) annotationsCount.textContent = String(readerAnnotations.length);
+  }
+
+  function persistAnnotations() {
+    try {
+      localStorage.setItem(annotationStorageKey, JSON.stringify(readerAnnotations));
+      annotationStorageAvailable = true;
+      updateAnnotationCount();
+      return true;
+    } catch (_) {
+      annotationStorageAvailable = false;
+      updateAnnotationCount();
+      return false;
+    }
+  }
+
+  function showAnnotationToast(message) {
+    if (!annotationToast) return;
+    annotationToast.textContent = message;
+    annotationToast.hidden = false;
+    clearTimeout(annotationToastTimer);
+    annotationToastTimer = setTimeout(() => { annotationToast.hidden = true; }, 2400);
+  }
+
+  function getTextNodes(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+    return nodes;
+  }
+
+  function getFlatText(root) {
+    return getTextNodes(root).map(node => node.nodeValue || '').join('');
+  }
+
+  function textLength(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue.length;
+    let length = 0;
+    node.childNodes.forEach(child => { length += textLength(child); });
+    return length;
+  }
+
+  function boundaryTextOffset(root, container, offset) {
+    let total = 0;
+    let current = container;
+    if (current.nodeType === Node.TEXT_NODE) {
+      total += Math.max(0, Math.min(offset, current.nodeValue.length));
+      current = current.parentNode;
+    } else {
+      const childOffset = Math.max(0, Math.min(offset, current.childNodes.length));
+      for (let i = 0; i < childOffset; i++) total += textLength(current.childNodes[i]);
+    }
+    while (current && current !== root) {
+      let sibling = current.previousSibling;
+      while (sibling) { total += textLength(sibling); sibling = sibling.previousSibling; }
+      current = current.parentNode;
+    }
+    return current === root ? total : -1;
+  }
+
+  function rangeAtTextOffsets(root, start, end) {
+    const nodes = getTextNodes(root);
+    const locate = (target, isEnd) => {
+      let position = 0;
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        const next = position + node.nodeValue.length;
+        if (target < next || (isEnd && target === next) || (target === position && node.nodeValue.length === 0)) {
+          return { node, offset: Math.max(0, Math.min(target - position, node.nodeValue.length)) };
+        }
+        position = next;
+      }
+      const last = nodes[nodes.length - 1];
+      return last ? { node: last, offset: last.nodeValue.length } : null;
+    };
+    const startPoint = locate(start, false);
+    const endPoint = locate(end, true);
+    if (!startPoint || !endPoint) return null;
+    const range = document.createRange();
+    range.setStart(startPoint.node, startPoint.offset);
+    range.setEnd(endPoint.node, endPoint.offset);
+    return range;
+  }
+
+  function captureSelectionDraft() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    const boundary = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement;
+    const anchor = boundary?.closest('#clause-view [id^="card-nc-"]');
+    if (!anchor || !document.getElementById('clause-view').contains(anchor)) return null;
+
+    let start = boundaryTextOffset(anchor, range.startContainer, range.startOffset);
+    let end = boundaryTextOffset(anchor, range.endContainer, range.endOffset);
+    const flatText = getFlatText(anchor);
+    if (start < 0 || end <= start) return null;
+    const selected = flatText.slice(start, end);
+    const leading = (selected.match(/^\s*/) || [''])[0].length;
+    const trailing = (selected.match(/\s*$/) || [''])[0].length;
+    start += leading;
+    end -= trailing;
+    const quote = flatText.slice(start, end);
+    if (!quote.trim()) return null;
+
+    const clauseCard = anchor.closest('.clause-card');
+    const sourcePageLabel = anchor.querySelector('.source-page-badge')?.textContent
+      || anchor.closest('.section-block')?.querySelector('.source-page-badge')?.textContent
+      || clauseCard?.querySelector('.source-page-badge')?.textContent
+      || '';
+    return {
+      anchorId: anchor.id,
+      navigationNc: currentViewState.nc || clauseCard?.id?.replace(/^card-nc-/, '') || '',
+      viewType: currentViewState.type,
+      sourcePageLabel,
+      quote,
+      start,
+      end,
+      prefix: flatText.slice(Math.max(0, start - 48), start),
+      suffix: flatText.slice(end, end + 48)
+    };
+  }
+
+  function resolveAnnotationOffsets(annotation, root) {
+    const text = getFlatText(root);
+    const start = Number(annotation.start);
+    const end = Number(annotation.end);
+    if (Number.isInteger(start) && Number.isInteger(end) && end > start && text.slice(start, end) === annotation.quote) return { start, end };
+
+    let index = text.indexOf(annotation.quote);
+    let best = null;
+    while (index >= 0) {
+      const prefixMatches = annotation.prefix ? text.slice(Math.max(0, index - annotation.prefix.length), index).endsWith(annotation.prefix) : true;
+      const after = index + annotation.quote.length;
+      const suffixMatches = annotation.suffix ? text.slice(after, after + annotation.suffix.length).startsWith(annotation.suffix) : true;
+      const score = Number(prefixMatches) + Number(suffixMatches);
+      if (!best || score > best.score) best = { start: index, end: after, score };
+      if (score === 2) break;
+      index = text.indexOf(annotation.quote, index + 1);
+    }
+    return best ? { start: best.start, end: best.end } : null;
+  }
+
+  function unwrapReaderAnnotations(root) {
+    root.querySelectorAll('[data-reader-annotation-id]').forEach(wrapper => {
+      const parent = wrapper.parentNode;
+      if (!parent) return;
+      while (wrapper.firstChild) parent.insertBefore(wrapper.firstChild, wrapper);
+      wrapper.remove();
+      parent.normalize();
+    });
+  }
+
+  function applyUserAnnotations() {
+    const view = document.getElementById('clause-view');
+    if (!view) return;
+    unwrapReaderAnnotations(view);
+    const visible = readerAnnotations
+      .map(annotation => ({ annotation, root: document.getElementById(annotation.anchorId) }))
+      .filter(entry => entry.root && view.contains(entry.root))
+      .map(entry => ({ ...entry, offsets: resolveAnnotationOffsets(entry.annotation, entry.root) }))
+      .filter(entry => entry.offsets)
+      .sort((a, b) => a.annotation.anchorId.localeCompare(b.annotation.anchorId) || b.offsets.start - a.offsets.start);
+
+    visible.forEach(({ annotation, root, offsets }) => {
+      const range = rangeAtTextOffsets(root, offsets.start, offsets.end);
+      if (!range || range.collapsed) return;
+      const wrapper = document.createElement(annotation.type === 'highlight' ? 'mark' : 'span');
+      wrapper.className = annotation.type === 'highlight' ? 'reader-user-highlight' : 'reader-memo-anchor';
+      wrapper.dataset.readerAnnotationId = annotation.id;
+      if (annotation.type === 'highlight') wrapper.dataset.color = annotation.color || 'yellow';
+      wrapper.title = annotation.type === 'memo' ? `Memo: ${annotation.memo || ''}` : 'User highlight';
+      try {
+        wrapper.appendChild(range.extractContents());
+        range.insertNode(wrapper);
+      } catch (_) {
+        // Keep the annotation in the list even if a changed document no longer supports its old text range.
+      }
+    });
+  }
+
+  function hideSelectionToolbar() {
+    if (selectionToolbar) selectionToolbar.hidden = true;
+    pendingSelectionDraft = null;
+  }
+
+  function updateSelectionToolbar() {
+    const draft = captureSelectionDraft();
+    if (!draft || !selectionToolbar) { hideSelectionToolbar(); return; }
+    pendingSelectionDraft = draft;
+    const range = window.getSelection().getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    selectionToolbar.hidden = false;
+    const left = Math.max(8, Math.min(window.innerWidth - selectionToolbar.offsetWidth - 8, rect.left + rect.width / 2 - selectionToolbar.offsetWidth / 2));
+    const top = Math.max(8, rect.top - selectionToolbar.offsetHeight - 10);
+    selectionToolbar.style.left = `${left}px`;
+    selectionToolbar.style.top = `${top}px`;
+  }
+
+  function createAnnotationId() {
+    return `annotation-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  function openMemoEditor(draft, existing = null) {
+    pendingMemoDraft = { ...draft, editingId: existing?.id || '' };
+    document.getElementById('annotation-dialog-title').textContent = existing ? 'Edit memo' : 'Add memo';
+    document.getElementById('annotation-quote').textContent = draft.quote;
+    annotationMemoInput.value = existing?.memo || '';
+    annotationDialog.hidden = false;
+    hideSelectionToolbar();
+    setTimeout(() => annotationMemoInput.focus(), 0);
+  }
+
+  function closeMemoEditor() {
+    annotationDialog.hidden = true;
+    pendingMemoDraft = null;
+  }
+
+  function saveMemo() {
+    if (!pendingMemoDraft) return;
+    const memo = annotationMemoInput.value.trim();
+    if (!memo) { annotationMemoInput.focus(); return; }
+    if (pendingMemoDraft.editingId) {
+      const existing = readerAnnotations.find(item => item.id === pendingMemoDraft.editingId);
+      if (existing) existing.memo = memo;
+    } else {
+      readerAnnotations.push({ ...pendingMemoDraft, id: createAnnotationId(), type: 'memo', memo, createdAt: new Date().toISOString() });
+    }
+    const stored = persistAnnotations();
+    closeMemoEditor();
+    applyUserAnnotations();
+    if (annotationsToggle?.getAttribute('aria-expanded') === 'true') showAnnotationsDrawer();
+    showAnnotationToast(stored ? 'Memo saved on this device' : 'Memo kept for this session; browser storage is unavailable');
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function annotationLocation(annotation) {
+    const node = nc_index[annotation.navigationNc] || {};
+    const clause = annotation.navigationNc || annotation.anchorId.replace(/^card-nc-/, '');
+    const title = `${node.id || clause}${node.title ? ` · ${node.title}` : ''}`;
+    return annotation.sourcePageLabel ? `${title} · ${annotation.sourcePageLabel}` : title;
+  }
+
+  function showAnnotationsDrawer() {
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+    cancelClausePreviewClose();
+    clauseRefHovered = false;
+    clauseDrawerHovered = false;
+    clauseRefFocused = false;
+    clauseDrawerFocused = false;
+    rightDrawerMode = 'annotations';
+    activeClausePreviewNc = '';
+    document.getElementById('right-drawer-title').textContent = 'My Highlights & Memos';
+    if (!readerAnnotations.length) {
+      content.innerHTML = '<div class="annotation-empty">Select text in a clause, then choose <strong>Highlight</strong> or <strong>Memo</strong>. Your notes are stored locally in this browser for this contract.</div>';
+    } else {
+      const sorted = [...readerAnnotations].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      content.innerHTML = `<div id="annotation-list">${sorted.map(annotation => `
+        <div class="annotation-item" data-annotation-card="${esc(annotation.id)}">
+          <div class="annotation-item-header"><span class="annotation-item-kind">${annotation.type === 'highlight' ? 'Highlight' : 'Memo'}</span><span class="annotation-item-location">${esc(annotationLocation(annotation))}</span></div>
+          <p class="annotation-item-quote">${esc(annotation.quote)}</p>
+          ${annotation.type === 'memo' ? `<p class="annotation-item-memo">${esc(annotation.memo || '')}</p>` : ''}
+          <div class="annotation-item-actions">
+            <button type="button" data-annotation-open="${esc(annotation.id)}">Open</button>
+            ${annotation.type === 'memo' ? `<button type="button" data-annotation-edit="${esc(annotation.id)}">Edit</button>` : ''}
+            <button type="button" data-annotation-delete="${esc(annotation.id)}">Delete</button>
+          </div>
+        </div>`).join('')}</div>`;
+      content.querySelectorAll('[data-annotation-open]').forEach(button => button.addEventListener('click', () => {
+        const annotation = readerAnnotations.find(item => item.id === button.dataset.annotationOpen);
+        if (annotation) openAnnotationLocation(annotation);
+      }));
+      content.querySelectorAll('[data-annotation-edit]').forEach(button => button.addEventListener('click', () => {
+        const annotation = readerAnnotations.find(item => item.id === button.dataset.annotationEdit);
+        if (annotation) openMemoEditor(annotation, annotation);
+      }));
+      content.querySelectorAll('[data-annotation-delete]').forEach(button => button.addEventListener('click', () => {
+        if (!window.confirm('Delete this annotation?')) return;
+        readerAnnotations = readerAnnotations.filter(item => item.id !== button.dataset.annotationDelete);
+        persistAnnotations();
+        applyUserAnnotations();
+        showAnnotationsDrawer();
+        showAnnotationToast('Annotation deleted');
+      }));
+    }
+    drawer.classList.add('open');
+    annotationsToggle?.setAttribute('aria-expanded', 'true');
+    syncDrawerWidthResizer();
+  }
+
+  function openAnnotationLocation(annotation) {
+    if (annotation.viewType === 'preamble') showPreamble({ recordHistory: false });
+    else if (annotation.viewType === 'full') showFullContract({ recordHistory: false });
+    else if (annotation.navigationNc && nc_index[annotation.navigationNc]) showNC(annotation.navigationNc, { recordHistory: false, forceClause: true });
+    else showFullContract({ recordHistory: false });
+
+    setTimeout(() => {
+      applyUserAnnotations();
+      const marker = document.querySelector(`[data-reader-annotation-id="${CSS.escape(annotation.id)}"]`);
+      const anchor = document.getElementById(annotation.anchorId);
+      (marker || anchor)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showAnnotationsDrawer();
+    }, 180);
+  }
+
+  annotationsToggle?.addEventListener('click', () => {
+    if (annotationsToggle.getAttribute('aria-expanded') === 'true') closeRightDrawer();
+    else showAnnotationsDrawer();
+  });
+  document.getElementById('right-drawer-close')?.addEventListener('click', () => annotationsToggle?.setAttribute('aria-expanded', 'false'));
+  document.getElementById('annotation-cancel')?.addEventListener('click', closeMemoEditor);
+  document.getElementById('annotation-save')?.addEventListener('click', saveMemo);
+  annotationDialog?.addEventListener('click', event => { if (event.target === annotationDialog) closeMemoEditor(); });
+  selectionToolbar?.querySelectorAll('[data-annotation-action]').forEach(button => {
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => {
+      if (!pendingSelectionDraft) return;
+      if (button.dataset.annotationAction === 'memo') { openMemoEditor(pendingSelectionDraft); return; }
+      readerAnnotations.push({
+        ...pendingSelectionDraft,
+        id: createAnnotationId(),
+        type: 'highlight',
+        color: document.getElementById('annotation-color').value,
+        createdAt: new Date().toISOString()
+      });
+      const stored = persistAnnotations();
+      hideSelectionToolbar();
+      applyUserAnnotations();
+      showAnnotationToast(stored ? 'Highlight saved on this device' : 'Highlight kept for this session; browser storage is unavailable');
+      window.getSelection()?.removeAllRanges();
+    });
+  });
+  document.addEventListener('mouseup', event => {
+    if (selectionToolbar?.contains(event.target)) return;
+    setTimeout(updateSelectionToolbar, 0);
+  });
+  document.addEventListener('keyup', event => {
+    if (event.key === 'Shift' || event.key.startsWith('Arrow')) updateSelectionToolbar();
+  });
+  document.addEventListener('mousedown', event => {
+    if (!selectionToolbar?.contains(event.target) && !annotationDialog?.contains(event.target)) hideSelectionToolbar();
+  });
+  mainContainer.addEventListener('click', event => {
+    const annotationMark = event.target.closest('[data-reader-annotation-id]');
+    if (!annotationMark) return;
+    const annotation = readerAnnotations.find(item => item.id === annotationMark.dataset.readerAnnotationId);
+    if (annotation) { event.preventDefault(); event.stopImmediatePropagation(); showAnnotationsDrawer(); }
+  }, true);
+
+  function cancelClausePreviewClose() {
+    clearTimeout(clausePreviewCloseTimer);
+    clausePreviewCloseTimer = null;
+  }
+
+  function scheduleClausePreviewClose() {
+    cancelClausePreviewClose();
+    clausePreviewCloseTimer = setTimeout(() => {
+      if (clauseRefHovered || clauseDrawerHovered || clauseRefFocused || clauseDrawerFocused || !['clause-preview', 'definition-preview'].includes(rightDrawerMode)) return;
+      closeRightDrawer();
+    }, 850);
+  }
+
+  rightDrawerPanel?.addEventListener('mouseenter', () => {
+    clauseDrawerHovered = true;
+    cancelClausePreviewClose();
+  });
+  rightDrawerPanel?.addEventListener('mouseleave', () => {
+    clauseDrawerHovered = false;
+    scheduleClausePreviewClose();
+  });
+  rightDrawerPanel?.addEventListener('focusin', () => {
+    clauseDrawerFocused = true;
+    cancelClausePreviewClose();
+  });
+  rightDrawerPanel?.addEventListener('focusout', event => {
+    if (rightDrawerPanel.contains(event.relatedTarget)) return;
+    clauseDrawerFocused = false;
+    scheduleClausePreviewClose();
+  });
+
+  function showClausePreview(node, nc, origin = null) {
+    if (!node || !nc) return;
+    if (rightDrawerMode === 'interpretation') return;
+    cancelClausePreviewClose();
+    if (origin) activeClausePreviewOrigin = origin;
+    if (rightDrawerMode === 'clause-preview' && activeClausePreviewNc === nc) return;
+
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+    const scopePrefix = node.source_scope === 'RFP' ? 'RFP-' : '';
+    const body = String(node.content || (node.paragraphs || []).join('\n') || '');
+    const clippedBody = body.slice(0, 1800);
+    const children = (node.sub_clauses || []).slice(0, 4);
+    const childHtml = children.map(section => {
+      const sectionBody = String(section.content || (section.paragraphs || []).join('\n') || '').slice(0, 420);
+      return `<div class="drawer-clause-subsection"><div class="drawer-clause-subsection-title">${esc(section.id || section.nc)} ${esc(section.title || '')}</div>${sectionBody ? formatContractText(sectionBody, defTerms, scopePrefix) : '<span>No direct text in this subsection.</span>'}</div>`;
+    }).join('');
+    const tablesHtml = (node.tables_html || []).slice(0, 1).join('');
+
+    document.getElementById('right-drawer-title').textContent = 'Linked Clause Preview';
+    content.innerHTML = `<div class="drawer-clause-preview">
+      <div class="drawer-clause-preview-header">
+        <span class="drawer-clause-preview-nc">${esc(node.display_nc || node.id || nc)}</span>
+        <span class="drawer-clause-preview-title">${esc(node.title || node.id || nc)}</span>
+      </div>
+      ${sourcePageBadge(node)}
+      <div class="drawer-clause-preview-body">
+        ${clippedBody ? formatContractText(clippedBody, defTerms, scopePrefix) + (body.length > clippedBody.length ? '<br><span>…</span>' : '') : '<span>No direct text is stored on this heading.</span>'}
+        ${tablesHtml ? `<div class="schedule-tables-wrap">${tablesHtml}</div>` : ''}
+        ${childHtml}
+      </div>
+      <button type="button" class="drawer-open-clause" data-open-clause-preview="${esc(nc)}">Open clause</button>
+    </div>`;
+    content.querySelector('[data-open-clause-preview]')?.addEventListener('click', () => {
+      const origin = activeClausePreviewOrigin;
+      closeRightDrawer();
+      showNC(nc, { returnAnchor: origin });
+    });
+
+    rightDrawerMode = 'clause-preview';
+    activeClausePreviewNc = nc;
+    activeDefinitionPreviewTerm = '';
+    annotationsToggle?.setAttribute('aria-expanded', 'false');
+    document.querySelectorAll('.def-item').forEach(item => item.classList.remove('active'));
+    drawer.classList.add('open');
+    syncDrawerWidthResizer();
+  }
+
+  function showDefinitionPreview(term) {
+    if (!term || !defs[term]) return;
+    if (rightDrawerMode === 'interpretation') return;
+    cancelClausePreviewClose();
+    clauseRefHovered = true;
+    activeClausePreviewOrigin = null;
+    if (rightDrawerMode === 'definition-preview' && activeDefinitionPreviewTerm === term && document.getElementById('right-drawer').classList.contains('open')) return;
+
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+    document.getElementById('right-drawer-title').textContent = 'Definition Preview';
+    content.innerHTML = `<div class="drawer-def-term">${esc(term)}</div><div class="drawer-def-body">${formatDefinitionText(defs[term], defTerms)}</div>`;
+    rightDrawerMode = 'definition-preview';
+    activeDefinitionPreviewTerm = term;
+    activeClausePreviewNc = '';
+    annotationsToggle?.setAttribute('aria-expanded', 'false');
+    document.querySelectorAll('.def-item').forEach(item => item.classList.remove('active'));
+    drawer.classList.add('open');
+    syncDrawerWidthResizer();
+  }
+  
+  function showAmbiguousReference(reference) {
+    const targets = duplicateRefs[reference] || [];
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+    cancelClausePreviewClose();
+    clauseRefHovered = false;
+    clauseDrawerHovered = false;
+    clauseRefFocused = false;
+    clauseDrawerFocused = false;
+    activeClausePreviewOrigin = null;
+    activeDefinitionPreviewTerm = '';
+    document.getElementById('right-drawer-title').textContent = `Repeated clause number: ${reference}`;
+    content.innerHTML = `<p class="ambiguity-note">This printed number appears more than once in the source. Choose the occurrence you mean.</p>` + targets.map(nc => {
+      const node = nc_index[nc] || {};
+      const excerpt = (node.content || '').slice(0, 220);
+      return `<button class="ambiguity-candidate" data-ambiguous-nc="${esc(nc)}"><strong>${esc(node.id || nc)}</strong><span>${esc(excerpt)}</span></button>`;
+    }).join('');
+    content.querySelectorAll('[data-ambiguous-nc]').forEach(button => button.addEventListener('click', () => {
+      const nc = button.dataset.ambiguousNc;
+      closeRightDrawer();
+      showNC(nc);
+    }));
+    rightDrawerMode = 'ambiguity';
+    activeClausePreviewNc = '';
+    drawer.classList.add('open');
+    annotationsToggle?.setAttribute('aria-expanded', 'false');
+    syncDrawerWidthResizer();
+  }
+
+  // Click handler (delegation)
+  mainContainer.addEventListener('click', (e) => {
+    const refTarget = e.target.closest('.ref-chip, .ref-highlight, .ref-ambiguous');
+    if (refTarget) {
+      if (refTarget.classList.contains('ref-ambiguous')) { showAmbiguousReference(refTarget.dataset.ref); return; }
+      const targetNc = refTarget.dataset.nc;
+      if (targetNc) showNC(targetNc, { returnAnchor: refTarget });
+      return;
+    }
+    const defTarget = e.target.closest('.def-highlight');
+    if (defTarget) {
+      const term = defTarget.textContent.trim();
+      const matchedTerm = defs[term] ? term : (defTerms.find(t => t.toLowerCase() === term.toLowerCase()) || term);
+      if (defs[matchedTerm]) showDefinition(matchedTerm);
+    }
+  });
+
+  mainContainer.addEventListener('focusin', event => {
+    const refTarget = event.target.closest('.ref-chip, .ref-highlight');
+    if (refTarget) {
+      clauseRefFocused = true;
+      const targetNc = refTarget.dataset.nc;
+      if (targetNc && nc_index[targetNc]) showClausePreview(nc_index[targetNc], targetNc);
+      return;
+    }
+    const defTarget = event.target.closest('.def-highlight');
+    if (defTarget) {
+      clauseRefFocused = true;
+      const term = defTarget.textContent.trim();
+      const matchedTerm = defs[term] ? term : (defTerms.find(t => t.toLowerCase() === term.toLowerCase()) || term);
+      if (defs[matchedTerm]) showDefinitionPreview(matchedTerm);
+    }
+  });
+  mainContainer.addEventListener('focusout', event => {
+    if (event.target.closest('.ref-chip, .ref-highlight')) {
+      clauseRefFocused = false;
+      scheduleClausePreviewClose();
+    }
+    if (event.target.closest('.def-highlight')) {
+      clauseRefFocused = false;
+      hidePreview(event);
+      scheduleClausePreviewClose();
+    }
+  });
+
+  // Hover handler (delegation)
+  mainContainer.addEventListener('mouseover', (e) => {
+    const ambiguousTarget = e.target.closest('.ref-ambiguous');
+    if (ambiguousTarget) {
+      const reference = ambiguousTarget.dataset.ref;
+      const candidates = (duplicateRefs[reference] || []).map(nc => {
+        const node = nc_index[nc] || {};
+        return `<div><strong>${esc(node.id || nc)}</strong>: ${esc((node.content || '').slice(0, 180))}</div>`;
+      }).join('');
+      showPreview(e, 'Repeated clause number', reference, candidates || 'More than one clause uses this printed number.', 'static');
+      return;
+    }
+    // 1. Hover on cross-references: show the linked clause in the right drawer.
+    const refTarget = e.target.closest('.ref-chip, .ref-highlight');
+    if (refTarget && (!e.relatedTarget || !refTarget.contains(e.relatedTarget))) {
+      clauseRefHovered = true;
+      cancelClausePreviewClose();
+      const targetNc = refTarget.dataset.nc;
+      const targetNode = nc_index[targetNc];
+      if (targetNode) showClausePreview(targetNode, targetNc, refTarget);
+      return;
+    }
+    
+    // 2. Hover on inline definitions: use the same right drawer as clause references.
+    const defTarget = e.target.closest('.def-highlight');
+    if (defTarget && (!e.relatedTarget || !defTarget.contains(e.relatedTarget))) {
+      clauseRefHovered = true;
+      cancelClausePreviewClose();
+      const term = defTarget.textContent.trim();
+      let matchedTerm = term;
+      if (!defs[matchedTerm]) {
+        // Try case-insensitive fallback
+        matchedTerm = defTerms.find(t => t.toLowerCase() === term.toLowerCase()) || term;
+      }
+      if (defs[matchedTerm]) showDefinitionPreview(matchedTerm);
+    }
+  });
+  
+  // Hover leave handler (delegation)
+  mainContainer.addEventListener('mouseout', (e) => {
+    const refTarget = e.target.closest('.ref-chip, .ref-highlight');
+    if (refTarget && (!e.relatedTarget || !refTarget.contains(e.relatedTarget))) {
+      clauseRefHovered = false;
+      scheduleClausePreviewClose();
+    }
+    const defTarget = e.target.closest('.def-highlight');
+    if (defTarget && (!e.relatedTarget || !defTarget.contains(e.relatedTarget))) {
+      clauseRefHovered = false;
+      scheduleClausePreviewClose();
+    }
+    const target = e.target.closest('.ref-chip, .ref-highlight, .ref-ambiguous, .def-highlight');
+    if (target) {
+      hidePreview(e);
+    }
+  });
+
+  // ── Definitions panel ───────────────────────────────────────────────────
+  // Definitions panel: exact term matches appear first, and each filter resets the list to its top.
+  const definitionCountBadge = document.getElementById('def-count');
+  const definitionSearchInput = document.getElementById('def-search');
+  renderDefs('');
+  definitionSearchInput.addEventListener('input', event => renderDefs(event.target.value));
+  definitionSearchInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') document.querySelector('#def-list .def-item')?.click();
+    if (event.key === 'Escape') {
+      definitionSearchInput.value = '';
+      renderDefs('');
+      definitionSearchInput.blur();
+    }
+  });
+
+  function definitionExcerpt(body, query, maxLength = 220) {
+    const source = String(body || '').replace(/\s+/g, ' ').trim();
+    const needle = String(query || '').trim().toLocaleLowerCase();
+    const index = needle ? source.toLocaleLowerCase().indexOf(needle) : -1;
+    const start = index > 70 ? index - 70 : 0;
+    return `${start ? '...' : ''}${source.slice(start, start + maxLength)}${source.length > start + maxLength ? '...' : ''}`;
+  }
+
+  function renderDefs(rawQuery) {
+    const list = document.getElementById('def-list');
+    const q = normalizeSearchText(rawQuery);
+    const terms = defTerms.map(term => {
+      const termKey = normalizeSearchText(term);
+      const bodyKey = normalizeSearchText(defs[term] || '');
+      let rank = 0;
+      if (q) {
+        if (termKey === q) rank = 0;
+        else if (termKey.startsWith(q)) rank = 1;
+        else if (termKey.includes(q)) rank = 2;
+        else if (bodyKey.includes(q)) rank = 3;
+        else return null;
+      }
+      return { term, rank };
+    }).filter(Boolean).sort((a, b) => a.rank - b.rank || a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }));
+
+    if (definitionCountBadge) definitionCountBadge.textContent = q ? `${terms.length} / ${defTerms.length}` : String(defTerms.length);
+    list.innerHTML = '';
+    list.scrollTop = 0;
+    if (!terms.length) {
+      list.innerHTML = `<div class="def-search-empty">No definition terms or text match "${esc(String(rawQuery || '').trim())}".</div>`;
+      return;
+    }
+
+    terms.forEach(({ term }) => {
+      const excerpt = definitionExcerpt(defs[term] || '', rawQuery);
+      const el = document.createElement('div');
+      el.className = 'def-item';
+      el.innerHTML = `<div class="def-term">${markQ(esc(term), String(rawQuery || '').trim())}</div><div class="def-body">${markQ(esc(excerpt), String(rawQuery || '').trim())}</div>`;
+      el.addEventListener('click', () => showDefinition(term));
+      el.addEventListener('mouseenter', () => { clauseRefHovered = true; showDefinitionPreview(term); });
+      el.addEventListener('mouseleave', () => { clauseRefHovered = false; scheduleClausePreviewClose(); });
+      el.addEventListener('focus', () => { clauseRefFocused = true; showDefinitionPreview(term); });
+      el.addEventListener('blur', () => { clauseRefFocused = false; scheduleClausePreviewClose(); });
+      list.appendChild(el);
+    });
+  }
+
+  const googleTtsSessionToken = '__GOOGLE_TTS_SESSION_TOKEN__';
+  const googleTtsAudio = document.getElementById('google-tts-audio');
+  const ttsStatus = document.getElementById('tts-status');
+  const ttsStatusMessage = document.getElementById('tts-status-message');
+  const ttsPlayButton = document.getElementById('tts-play-button');
+  const ttsStopButton = document.getElementById('tts-stop-button');
+  let activeTtsObjectUrl = '';
+  let activeTtsRequest = null;
+  let ttsRequestSequence = 0;
+  let activeAudioContext = null;
+  let activeAudioSources = [];
+  let activeAudioEndTime = 0;
+  let ttsFinishTimer = null;
+
+  function setTtsStatus(message, { showPlay = false, showStop = false } = {}) {
+    ttsStatusMessage.textContent = message;
+    ttsStatus.hidden = false;
+    ttsPlayButton.hidden = !showPlay;
+    ttsStopButton.hidden = !showStop;
+  }
+
+  function stopGoogleTts(hideStatus = false) {
+    ttsRequestSequence += 1;
+    if (activeTtsRequest) activeTtsRequest.abort();
+    activeTtsRequest = null;
+    clearTimeout(ttsFinishTimer);
+    ttsFinishTimer = null;
+    activeAudioSources.forEach(source => { try { source.stop(); } catch (_) { } });
+    activeAudioSources = [];
+    activeAudioEndTime = 0;
+    if (activeAudioContext) {
+      try { activeAudioContext.close().catch(() => {}); } catch (_) { }
+    }
+    activeAudioContext = null;
+    googleTtsAudio.pause();
+    googleTtsAudio.removeAttribute('src');
+    googleTtsAudio.load();
+    if (activeTtsObjectUrl) URL.revokeObjectURL(activeTtsObjectUrl);
+    activeTtsObjectUrl = '';
+    ttsPlayButton.hidden = true;
+    ttsStopButton.hidden = true;
+    if (hideStatus) ttsStatus.hidden = true;
+  }
+
+  function queuePcmAudio(encoded, sampleRate, playback) {
+    const binary = atob(encoded);
+    let bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+    if (playback.carry !== null) {
+      const joined = new Uint8Array(bytes.length + 1);
+      joined[0] = playback.carry;
+      joined.set(bytes, 1);
+      bytes = joined;
+      playback.carry = null;
+    }
+    if (bytes.length % 2) {
+      playback.carry = bytes[bytes.length - 1];
+      bytes = bytes.subarray(0, bytes.length - 1);
+    }
+    if (!bytes.length || !activeAudioContext) return;
+    const frames = bytes.length / 2;
+    const buffer = activeAudioContext.createBuffer(1, frames, sampleRate);
+    const channel = buffer.getChannelData(0);
+    for (let i = 0; i < frames; i++) {
+      let sample = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
+      if (sample >= 0x8000) sample -= 0x10000;
+      channel[i] = sample / 32768;
+    }
+    const source = activeAudioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(activeAudioContext.destination);
+    playback.nextTime = Math.max(playback.nextTime, activeAudioContext.currentTime + 0.03);
+    source.start(playback.nextTime);
+    playback.nextTime += buffer.duration;
+    activeAudioEndTime = playback.nextTime;
+    activeAudioSources.push(source);
+    source.addEventListener('ended', () => {
+      const index = activeAudioSources.indexOf(source);
+      if (index >= 0) activeAudioSources.splice(index, 1);
+    });
+  }
+
+  async function speakUnaryGoogleTts(cleanText, sequence, controller) {
+    const response = await fetch('/api/tts/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Contract-Viewer-Session': googleTtsSessionToken },
+      body: JSON.stringify({ text: cleanText, mode: readerSettings.speechMode }),
+      signal: controller.signal
+    });
+    if (sequence !== ttsRequestSequence) return;
+    if (!response.ok) {
+      let detail = `Google TTS returned HTTP ${response.status}.`;
+      try { const error = await response.json(); if (error.error) detail = error.error; } catch (_) { }
+      throw new Error(detail);
+    }
+    const audioBlob = await response.blob();
+    if (sequence !== ttsRequestSequence) return;
+    activeTtsObjectUrl = URL.createObjectURL(audioBlob);
+    googleTtsAudio.src = activeTtsObjectUrl;
+    setTtsStatus('Playing selected text with Google Gemini TTS.', { showPlay: true, showStop: true });
+    try { await googleTtsAudio.play(); ttsPlayButton.hidden = true; }
+    catch (_) { setTtsStatus('Speech is ready. Select Play to start audio.', { showPlay: true, showStop: true }); }
+  }
+
+  async function speakStreamingGoogleTts(cleanText, sequence, controller) {
+    const response = await fetch('/api/tts/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Contract-Viewer-Session': googleTtsSessionToken },
+      body: JSON.stringify({ text: cleanText, mode: readerSettings.speechMode }),
+      signal: controller.signal
+    });
+    if (sequence !== ttsRequestSequence) return;
+    if (!response.ok) {
+      let detail = `Google TTS returned HTTP ${response.status}.`;
+      try { const error = await response.json(); if (error.error) detail = error.error; } catch (_) { }
+      throw new Error(detail);
+    }
+    if (!response.body) throw new Error('This browser could not receive streaming speech. Try Chrome or Edge.');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const playback = { nextTime: activeAudioContext.currentTime + 0.05, carry: null };
+    let pending = '';
+    let receivedAudio = false;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (sequence !== ttsRequestSequence) return;
+      pending += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      let newline;
+      while ((newline = pending.indexOf('\n')) >= 0) {
+        const line = pending.slice(0, newline).trim();
+        pending = pending.slice(newline + 1);
+        if (!line) continue;
+        const item = JSON.parse(line);
+        if (item.error) throw new Error(item.error);
+        if (item.audio) {
+          queuePcmAudio(item.audio, Number(item.sample_rate) || 24000, playback);
+          if (!receivedAudio) {
+            receivedAudio = true;
+            setTtsStatus('Playing selected text with Google Gemini TTS.', { showPlay: activeAudioContext.state !== 'running', showStop: true });
+          }
+        }
+      }
+      if (done) break;
+    }
+    if (!receivedAudio) throw new Error('Google did not return speech audio.');
+    if (activeAudioContext.state !== 'running') {
+      setTtsStatus('Speech is ready. Select Play to start audio.', { showPlay: true, showStop: true });
+      return;
+    }
+    const remainingMs = Math.max(0, (playback.nextTime - activeAudioContext.currentTime) * 1000);
+    ttsFinishTimer = setTimeout(() => {
+      if (sequence === ttsRequestSequence) setTtsStatus('Speech finished. Select text and right-click to listen again.');
+    }, remainingMs + 150);
+  }
+
+  async function speakWithGoogleTts(text) {
+    const cleanText = String(text || '').trim();
+    if (!cleanText) return;
+    const byteLength = new TextEncoder().encode(cleanText).length;
+    if (byteLength > 5000) {
+      setTtsStatus(`Selection is ${byteLength} bytes. This reader accepts up to 5,000 bytes per speech request; select a shorter passage.`);
+      return;
+    }
+    if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname) || googleTtsSessionToken.startsWith('__GOOGLE_TTS_')) {
+      setTtsStatus('Open this contract with Open-with-Google-TTS.cmd beside the HTML to enable speech.');
+      return;
+    }
+
+    stopGoogleTts();
+    const sequence = ++ttsRequestSequence;
+    const controller = new AbortController();
+    activeTtsRequest = controller;
+    setTtsStatus('Preparing natural US English speech with Google Gemini TTS...', { showStop: true });
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        activeAudioContext = new AudioContextClass();
+        activeAudioContext.resume().catch(() => {});
+        await speakStreamingGoogleTts(cleanText, sequence, controller);
+      } else {
+        await speakUnaryGoogleTts(cleanText, sequence, controller);
+      }
+    } catch (error) {
+      if (error.name === 'AbortError' || sequence !== ttsRequestSequence) return;
+      setTtsStatus(error.message || 'Google TTS could not synthesize the selection.');
+    } finally {
+      if (sequence === ttsRequestSequence) activeTtsRequest = null;
+    }
+  }
+
+  let activeInterpretRequest = null;
+  let interpretRequestSequence = 0;
+  let activeInterpretText = '';
+
+  function interpretationSection(parent, title, body) {
+    const section = document.createElement('section');
+    section.className = 'interpretation-section';
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = body || 'Not specified in the selected passage.';
+    section.append(heading, paragraph);
+    parent.appendChild(section);
+  }
+
+  async function interpretSelection(text) {
+    const cleanText = String(text || '').trim();
+    if (!cleanText) return;
+    activeInterpretText = cleanText;
+    if (activeInterpretRequest) activeInterpretRequest.abort();
+    const controller = new AbortController();
+    activeInterpretRequest = controller;
+    const sequence = ++interpretRequestSequence;
+    const level = readerSettings.interpretationLevel;
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+    rightDrawerMode = 'interpretation';
+    annotationsToggle?.setAttribute('aria-expanded', 'false');
+    document.getElementById('right-drawer-title').textContent = 'Contract Interpretation';
+    content.replaceChildren();
+    const quote = document.createElement('blockquote');
+    quote.className = 'interpretation-quote';
+    quote.textContent = cleanText.length > 1200 ? cleanText.slice(0, 1200) + '…' : cleanText;
+    const badge = document.createElement('span');
+    badge.className = 'interpretation-level';
+    badge.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+    const message = document.createElement('p');
+    message.className = 'interpretation-loading';
+    message.textContent = 'Explaining the selected text in English and Korean…';
+    content.append(quote, badge, message);
+    drawer.classList.add('open');
+    syncDrawerWidthResizer();
+
+    if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname) || googleTtsSessionToken.startsWith('__GOOGLE_TTS_')) {
+      message.textContent = 'Open this contract with Open-with-Google-TTS.cmd beside the HTML to enable interpretation.';
+      return;
+    }
+    if (new TextEncoder().encode(cleanText).length > 12000) {
+      message.textContent = 'The selected passage is too long. Select up to 12,000 UTF-8 bytes for interpretation.';
+      return;
+    }
+    try {
+      const response = await fetch('/api/interpret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Contract-Viewer-Session': googleTtsSessionToken },
+        body: JSON.stringify({ text: cleanText, level }),
+        signal: controller.signal
+      });
+      const payload = await response.json();
+      if (sequence !== interpretRequestSequence || rightDrawerMode !== 'interpretation') return;
+      if (!response.ok) throw new Error(payload.error || `Interpretation returned HTTP ${response.status}.`);
+      const result = payload.interpretation || {};
+      message.remove();
+      interpretationSection(content, 'Plain English', result.plain_english);
+      interpretationSection(content, '한국어 해설', result.korean_explanation);
+      if (Array.isArray(result.key_terms) && result.key_terms.length) {
+        const section = document.createElement('section');
+        section.className = 'interpretation-section';
+        const heading = document.createElement('h3');
+        heading.textContent = '핵심 용어';
+        const list = document.createElement('ul');
+        list.className = 'interpretation-terms';
+        result.key_terms.slice(0, 8).forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.english || ''} — ${item.korean || ''}`;
+          list.appendChild(li);
+        });
+        section.append(heading, list);
+        content.appendChild(section);
+      }
+      interpretationSection(content, '계약 엔지니어 관점', result.contract_engineer_view);
+      interpretationSection(content, '판단의 한계', result.limits);
+      const again = document.createElement('button');
+      again.className = 'drawer-open-clause';
+      again.type = 'button';
+      again.textContent = 'Explain again at current level';
+      again.addEventListener('click', () => interpretSelection(activeInterpretText));
+      content.appendChild(again);
+    } catch (error) {
+      if (error.name === 'AbortError' || sequence !== interpretRequestSequence || rightDrawerMode !== 'interpretation') return;
+      message.textContent = error.message || 'Could not interpret this passage.';
+    } finally {
+      if (sequence === interpretRequestSequence) activeInterpretRequest = null;
+    }
+  }
+
+  selectionToolbar?.querySelectorAll('[data-selection-action]').forEach(button => {
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => {
+      const text = pendingSelectionDraft?.quote || window.getSelection()?.toString();
+      hideSelectionToolbar();
+      if (button.dataset.selectionAction === 'read') speakWithGoogleTts(text);
+      else interpretSelection(text);
+    });
+  });
+
+  document.addEventListener('contextmenu', event => {
+    const app = document.getElementById('app');
+    if (!app.contains(event.target) || event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const selectedText = window.getSelection()?.toString().trim();
+    if (!selectedText) return;
+    event.preventDefault();
+    hideSelectionToolbar();
+    speakWithGoogleTts(selectedText);
+  });
+  ttsPlayButton.addEventListener('click', async () => {
+    try {
+      if (activeAudioContext) {
+        await activeAudioContext.resume();
+        clearTimeout(ttsFinishTimer);
+        const remainingMs = Math.max(0, (activeAudioEndTime - activeAudioContext.currentTime) * 1000);
+        const sequence = ttsRequestSequence;
+        ttsFinishTimer = setTimeout(() => {
+          if (sequence === ttsRequestSequence) setTtsStatus('Speech finished. Select text and right-click to listen again.');
+        }, remainingMs + 150);
+      }
+      else await googleTtsAudio.play();
+      ttsPlayButton.hidden = true;
+    }
+    catch (error) { setTtsStatus('Audio playback did not start. Press Play to try again.', { showPlay: true, showStop: true }); }
+  });
+  ttsStopButton.addEventListener('click', () => stopGoogleTts());
+  document.getElementById('tts-close-button').addEventListener('click', () => stopGoogleTts(true));
+  googleTtsAudio.addEventListener('ended', () => {
+    ttsPlayButton.hidden = true;
+    ttsStopButton.hidden = true;
+    setTtsStatus('Speech finished. Select text and right-click to listen again.');
+  });
+  googleTtsAudio.addEventListener('error', () => setTtsStatus('Audio could not be played. Select the text and right-click to try again.'));
+
+  const preambleItem = document.getElementById('toc-preamble');
+  if (preambleItem) {
+    preambleItem.addEventListener('click', showPreamble);
+    preambleItem.addEventListener('mouseenter', (e) => showPreview(e, 'Preamble', 'Doc', '계약의 서두 및 당사자, 배경 목적 등을 서술한 계약 전문을 확인합니다.', 'static'));
+    preambleItem.addEventListener('mouseleave', hidePreview);
+  }
+
+  const fullTextItem = document.getElementById('toc-fulltext');
+  if (fullTextItem) {
+    fullTextItem.addEventListener('click', showFullContract);
+    fullTextItem.addEventListener('mouseenter', (e) => showPreview(e, 'Full Contract', 'Doc', '계약서 전체 본문(전문 및 전체 조항)을 하나의 연속된 뷰로 통합하여 확인합니다.', 'static'));
+    fullTextItem.addEventListener('mouseleave', hidePreview);
+  }
+
+  // ── Build hierarchical TOC from the complete clause index ────────────────
+  const toc = document.getElementById('toc');
+  const tocNodes = Object.values(nc_index)
+    .filter(node => node && node.nc && Number(node.level) >= 2)
+    .map(node => ({ ...node, children: [] }));
+  const tocByNC = new Map(tocNodes.map(node => [node.nc, node]));
+  const tocRoots = [];
+
+  tocNodes.forEach(node => {
+    const parts = node.nc.split('.');
+    let parent = node.parent_nc ? tocByNC.get(node.parent_nc) : null;
+    while (!parent && parts.length > 1) {
+      parts.pop();
+      parent = tocByNC.get(parts.join('.'));
+      if (parent) break;
+    }
+    if (parent) parent.children.push(node);
+    else tocRoots.push(node);
+  });
+
+  const scheduleOrder = { 'Sch-I': 1, 'Sch-II': 2, 'Sch-III': 3, 'Sch-IV': 4, 'Sch-V': 5, 'Sch-VI': 6, 'Sch-VII': 7, 'Sch-VIII': 8, 'Sch-IX': 9, 'Sch-X': 10 };
+  function compareTocNodes(a, b) {
+    const aSchedule = scheduleOrder[a.nc];
+    const bSchedule = scheduleOrder[b.nc];
+    if (aSchedule && bSchedule) return aSchedule - bSchedule;
+    if (aSchedule) return 1;
+    if (bSchedule) return -1;
+    return a.nc.localeCompare(b.nc, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  function renderTocNode(node, depth = 0) {
+    const item = document.createElement('div');
+    item.className = 'toc-item';
+    const hasChildren = node.children.length > 0;
+    const row = document.createElement('div');
+    row.className = 'toc-row';
+    row.dataset.nc = node.nc;
+    row.style.paddingLeft = `${14 + depth * 16}px`;
+    row.innerHTML = `
+      <span class="toc-toggle">${hasChildren ? '▶' : ' '}</span>
+      <span class="toc-nc">${esc(node.id || node.nc)}</span>
+      <span class="toc-title">${esc(stripArticle(node.title || '', node.id || node.nc))}</span>`;
+
+    let previewContent = node.content || (node.paragraphs || []).join('\n');
+    if (!previewContent && hasChildren) {
+      previewContent = node.children.map(child => `• ${child.id || child.nc} ${child.title || ''}`).join('\n');
+    }
+    row.addEventListener('mouseenter', e => showPreview(
+      e, stripArticle(node.title || '', node.id || node.nc), node.id || node.nc, previewContent, 'clause'));
+    row.addEventListener('mouseleave', hidePreview);
+    row.addEventListener('click', () => showNC(node.nc));
+
+    const children = document.createElement('div');
+    children.className = 'toc-children';
+    if (hasChildren) {
+      const toggle = row.querySelector('.toc-toggle');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.addEventListener('click', e => {
+        e.stopPropagation();
+        const open = children.classList.toggle('open');
+        toggle.classList.toggle('open', open);
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+      node.children.sort(compareTocNodes).forEach(child => {
+        children.appendChild(renderTocNode(child, depth + 1));
+      });
+    }
+
+    item.appendChild(row);
+    item.appendChild(children);
+    return item;
+  }
+
+  tocRoots.sort(compareTocNodes).forEach(node => toc.appendChild(renderTocNode(node)));
+
+  // ── Active TOC / Static States ──────────────────────────────────────────
+  function setActiveStatic(id) {
+    document.querySelectorAll('.toc-row').forEach(r => r.classList.remove('active'));
+    document.querySelectorAll('.toc-static-item').forEach(r => r.classList.toggle('active', r.id === id));
+    document.querySelectorAll('.def-item').forEach(r => r.classList.remove('active'));
+  }
+
+  function setActive(nc) {
+    document.querySelectorAll('.toc-static-item').forEach(r => r.classList.remove('active'));
+    document.querySelectorAll('.def-item').forEach(r => r.classList.remove('active'));
+    document.querySelectorAll('.toc-row').forEach(r => r.classList.toggle('active', r.dataset.nc === nc));
+    // Auto-expand parent
+    const row = toc.querySelector(`[data-nc="${nc}"]`);
+    let parent = row ? row.closest('.toc-children') : null;
+    while (parent) {
+      parent.classList.add('open');
+      const toggle = parent.previousElementSibling?.querySelector('.toc-toggle');
+      if (toggle) {
+        toggle.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+      }
+      parent = parent.parentElement?.closest('.toc-children') || null;
+    }
+  }
+
+  // ── Close Right Slide-out Drawer ──────────────────────────────────────
+  function closeRightDrawer() {
+    cancelClausePreviewClose();
+    if (rightDrawerMode === 'interpretation' && activeInterpretRequest) {
+      activeInterpretRequest.abort();
+      activeInterpretRequest = null;
+      interpretRequestSequence += 1;
+    }
+    clauseRefHovered = false;
+    clauseDrawerHovered = false;
+    clauseRefFocused = false;
+    clauseDrawerFocused = false;
+    rightDrawerMode = 'none';
+    activeClausePreviewNc = '';
+    activeClausePreviewOrigin = null;
+    activeDefinitionPreviewTerm = '';
+    document.getElementById('right-drawer').classList.remove('open');
+    annotationsToggle?.setAttribute('aria-expanded', 'false');
+    syncDrawerWidthResizer();
+    document.querySelectorAll('.def-item').forEach(r => r.classList.remove('active'));
+    _lastDefTerm = null;   // reset toggle state
+  }
+
+  // ── Show Preamble ─────────────────────────────────────────────────────
+  function showPreamble(options = {}) {
+    if (options.recordHistory !== false) pushCurrentViewToHistory();
+    currentViewState = { type: 'preamble', nc: null };
+    closeRightDrawer();
+    setActiveStatic('toc-preamble');
+    hideSearch();
+    const view = document.getElementById('clause-view');
+    view.innerHTML = '';
+    document.getElementById('welcome').style.display = 'none';
+
+    const card = document.createElement('div');
+    card.className = 'clause-card';
+    card.id = `card-nc-preamble`;
+    card.style.borderLeft = '4px solid var(--accent)';
+    
+    let html = `<div class="clause-header">
+      <span class="clause-nc">Preamble</span>
+      <span class="clause-title">Contract Preamble (계약 전문)</span>
+    </div>`;
+
+    if (D.preamble) {
+      html += formatPreamble(D.preamble, defTerms);
+    } else {
+      html += `<p style="color: var(--text3);">No preamble text found.</p>`;
+    }
+    
+    card.innerHTML = html;
+    view.appendChild(card);
+    applyUserAnnotations();
+    view.scrollTop = 0;
+    document.getElementById('main').scrollTop = 0;
+    syncCurrentBrowserHistoryState();
+  }
+
+  // ── Show Full Contract ────────────────────────────────────────────────
+  function showFullContract(options = {}) {
+    if (options.recordHistory !== false) pushCurrentViewToHistory();
+    currentViewState = { type: 'full', nc: null };
+    closeRightDrawer();
+    setActiveStatic('toc-fulltext');
+    hideSearch();
+    const view = document.getElementById('clause-view');
+    view.innerHTML = '';
+    document.getElementById('welcome').style.display = 'none';
+
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '0';
+
+    // Append Preamble
+    if (D.preamble) {
+      const pCard = document.createElement('div');
+      pCard.className = 'clause-card';
+      pCard.id = `card-nc-preamble`;
+      pCard.style.borderLeft = '4px solid var(--accent)';
+      let html = `<div class="clause-header">
+        <span class="clause-nc">Preamble</span>
+        <span class="clause-title">Contract Preamble (계약 전문)</span>
+      </div>`;
+      html += formatPreamble(D.preamble, defTerms);
+      pCard.innerHTML = html;
+      container.appendChild(pCard);
+    }
+
+    // Append Articles
+    clauses.forEach(cl => {
+      container.appendChild(renderArticle(cl));
+    });
+
+    view.appendChild(container);
+    applyUserAnnotations();
+    view.scrollTop = 0;
+    document.getElementById('main').scrollTop = 0;
+    syncCurrentBrowserHistoryState();
+  }
+
+  // ── Show Definition in Slide-out Drawer (toggle + no overlay) ────────
+  let _lastDefTerm = null;  // track last opened definition term
+
+  function showDefinition(term) {
+    const drawer = document.getElementById('right-drawer');
+    const content = document.getElementById('right-drawer-content');
+
+    // Toggle: if same term clicked again and drawer is open, close it
+    if (drawer.classList.contains('open') && rightDrawerMode === 'definition' && _lastDefTerm === term) {
+      closeRightDrawer();
+      return;
+    }
+    _lastDefTerm = term;
+    cancelClausePreviewClose();
+    clauseRefHovered = false;
+    clauseDrawerHovered = false;
+    activeClausePreviewOrigin = null;
+    activeDefinitionPreviewTerm = '';
+    rightDrawerMode = 'definition';
+    activeClausePreviewNc = '';
+    annotationsToggle?.setAttribute('aria-expanded', 'false');
+
+    // Highlight definition list item on the left
+    document.querySelectorAll('.def-item').forEach(r => {
+      const t = r.querySelector('.def-term')?.textContent;
+      r.classList.toggle('active', t === term);
+    });
+
+    document.getElementById('right-drawer-title').textContent = 'Definition Detail';
+    let html = `
+      <div class="drawer-def-term">${esc(term)}</div>
+      <div class="drawer-def-body">${formatDefinitionText(defs[term] || '', defTerms)}</div>
+    `;
+
+    content.innerHTML = html;
+    drawer.classList.add('open');
+    syncDrawerWidthResizer();
+  }
+
+  // ── Show clause/section ────────────────────────────────────────────────
+  function showNC(nc, options = {}) {
+    const mainEl = document.getElementById('main');
+    const node = nc_index[nc];
+    if (!node) return;
+    const keepClauseOutline = rightDrawerMode === 'clause-outline' && rightDrawerPanel.classList.contains('open');
+
+    // 1. Scroll-into-view behavior if we are in Full Contract view
+    const isFullContract = document.getElementById('toc-fulltext').classList.contains('active');
+    if (!options.forceClause && isFullContract) {
+      const targetEl = document.getElementById(`card-nc-${nc}`);
+      if (targetEl) {
+        if (options.recordHistory !== false && !(currentViewState.type === 'full' && currentViewState.nc === nc)) pushCurrentViewToHistory(options.returnAnchor || null);
+        currentViewState = { type: 'full', nc };
+        searchReturnState = null;
+        document.querySelectorAll('.toc-row').forEach(r => r.classList.toggle('active', r.dataset.nc === nc));
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetEl.style.transition = 'background-color 0.3s';
+        targetEl.style.backgroundColor = 'rgba(92, 115, 242, 0.2)';
+        setTimeout(() => { targetEl.style.backgroundColor = ''; }, 1200);
+        showClauseOutline(nc);
+        syncCurrentBrowserHistoryState();
+        syncCurrentBrowserHistoryStateWhenScrollSettles(nc);
+        return;
+      }
+    }
+
+    // 2. Re-click same NC → restore previous scroll position
+    if (!options.forceClause && currentViewState.type === 'clause' && currentViewState.nc === nc) return;
+
+    // 3. Save current scroll before navigating
+    if (options.recordHistory !== false) pushCurrentViewToHistory(options.returnAnchor || null);
+    currentViewState = { type: 'clause', nc };
+    searchReturnState = null;
+
+    // 4. Navigate to new clause
+    if (!keepClauseOutline) closeRightDrawer();
+    setActive(nc);
+    hideSearch();
+
+    // Find the full Article object
+    const articleNc = nc.split('.')[0];
+    const article   = clauses.find(c => c.nc === articleNc);
+
+    const view = document.getElementById('clause-view');
+    view.innerHTML = '';
+    document.getElementById('welcome').style.display = 'none';
+
+    if (node.level === 2 && article) {
+      view.appendChild(renderArticle(article));
+    } else if (node.level >= 3 && article) {
+      // Render the containing section where available; otherwise show the article.
+      const sectionNc = (node.level > 3 && node.parent_nc) ? node.parent_nc : nc.split('.').slice(0, 2).join('.');
+      const sc = article.sub_clauses.find(s => s.nc === sectionNc);
+      if (sc) {
+        const wrap = document.createElement('div');
+        wrap.className = 'clause-card';
+        wrap.id = `card-nc-${article.nc}`;
+        wrap.innerHTML = `<div class="clause-header">
+          <span class="clause-nc">${esc(article.id)}</span>
+          <span class="clause-title" style="font-size:13px;color:var(--text2)">${esc(stripArticle(article.title, article.id))}</span>
+        </div>`;
+        wrap.appendChild(renderSection(sc));
+        view.appendChild(wrap);
+      } else {
+        view.appendChild(renderArticle(article));
+      }
+
+      if (nc !== articleNc && options.restoreScrollTop === undefined) {
+        setTimeout(() => {
+          const subEl = document.getElementById(`card-nc-${nc}`);
+          if (subEl) {
+            subEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            subEl.style.transition = 'background-color 0.3s';
+            subEl.style.backgroundColor = 'rgba(92, 115, 242, 0.2)';
+            setTimeout(() => { subEl.style.backgroundColor = ''; }, 1200);
+          }
+        }, 100);
+      }
+    }
+    applyUserAnnotations();
+    view.scrollTop = options.restoreScrollTop === undefined ? 0 : options.restoreScrollTop;
+    mainEl.scrollTop = options.restoreScrollTop === undefined ? 0 : options.restoreScrollTop;
+    showClauseOutline(nc);
+    syncCurrentBrowserHistoryState();
+  }
+
+  // ── Render Article card ─────────────────────────────────────────────────
+  function renderArticle(cl) {
+    const card = document.createElement('div');
+    card.className = 'clause-card';
+    card.id = `card-nc-${cl.nc}`;
+    const scopePrefix = cl.source_scope === 'RFP' ? 'RFP-' : '';
+
+    const hasStructuredDefinitions = (cl.sub_clauses || []).some(section =>
+      /\b(?:defined\s+terms?|definitions)\b/i.test(section.title || '') && Object.keys(defs).length
+    );
+
+    let html = `<div class="clause-header">
+      <span class="clause-nc">${esc(cl.id)}</span>
+      <span class="clause-title">${esc(stripArticle(cl.title, cl.id))}</span>
+      ${sourcePageBadge(cl)}
+    </div>`;
+
+    // Article-level body content
+    if (cl.content && !hasStructuredDefinitions) html += `<div class="clause-body">${formatContractText(cl.content, defTerms, scopePrefix)}</div>`;
+
+    // Schedule tables (SCHEDULE I–V embedded tables)
+    if (cl.tables_html && cl.tables_html.length) {
+      html += `<div class="schedule-tables-wrap">${cl.tables_html.join('')}</div>`;
+    }
+
+    // Article-level named items (no sub-sections)
+    if (cl.named_items && cl.named_items.length) {
+      html += renderNamedItems(cl.named_items);
+    }
+
+    // Cross-refs at article level
+    if (cl.references && cl.references.length) html += renderRefs(cl.references);
+
+    card.innerHTML = html;
+
+    // Sub-sections
+    if (cl.sub_clauses && cl.sub_clauses.length) {
+      cl.sub_clauses.forEach(sc => card.appendChild(renderSection(sc, scopePrefix)));
+    }
+
+    return card;
+  }
+
+  // ── Recursive Sub-list Rendering ─────────────────────────────────────────
+  function renderSubList(items, depth, scopePrefix = '') {
+    if (!items || !items.length) return '';
+    let listClass = '';
+    let itemClass = '';
+    let letterClass = '';
+    let bodyClass = '';
+
+    if (depth === 0) {
+      listClass = 'alpha-list';
+      itemClass = 'alpha-item';
+      letterClass = 'alpha-letter';
+      bodyClass = 'alpha-body';
+    } else if (depth === 1) {
+      listClass = 'roman-list';
+      itemClass = 'roman-item';
+      letterClass = 'roman-letter';
+      bodyClass = 'roman-body';
+    } else {
+      listClass = 'level5-list';
+      itemClass = 'level5-item';
+      letterClass = 'level5-letter';
+      bodyClass = 'level5-body';
+    }
+
+    let subHtml = `<div class="${listClass}">`;
+    items.forEach(item => {
+      subHtml += `<div class="${itemClass}" id="card-nc-${item.nc}">
+        <span class="${letterClass}">(${esc(item.letter)})</span>
+        <div class="${bodyClass}">${formatContractText(item.content || '', defTerms, scopePrefix)}`;
+
+      if (item.children && item.children.length) {
+        subHtml += renderSubList(item.children, depth + 1, scopePrefix);
+      }
+
+      subHtml += `</div></div>`;
+    });
+    subHtml += `</div>`;
+    return subHtml;
+  }
+
+  // ── Render Section block ────────────────────────────────────────────────
+  function renderSection(sc, scopePrefix = '') {
+    const div = document.createElement('div');
+    div.className = 'section-block';
+    div.id = `card-nc-${sc.nc}`;
+    const isDefinitionTableSection = /\b(?:defined\s+terms?|definitions)\b/i.test(sc.title || '') && Object.keys(defs).length > 0;
+
+    let html = `<div class="section-header">
+      <span class="section-nc">${esc(sc.id)}</span>
+      <span class="section-title">${esc(sc.title || sc.id)}</span>
+      ${sourcePageBadge(sc)}
+    </div>`;
+
+    if (sc.content && !isDefinitionTableSection) html += `<div class="section-body">${formatContractText(sc.content, defTerms, scopePrefix)}</div>`;
+
+    // Tables may belong to a numbered sub-clause (for example, a price breakdown).
+    if (sc.tables_html && sc.tables_html.length) {
+      html += `<div class="schedule-tables-wrap">${sc.tables_html.join('')}</div>`;
+    }
+
+    // Named items
+    if (!isDefinitionTableSection && sc.named_items && sc.named_items.length) html += renderNamedItems(sc.named_items, scopePrefix);
+
+    // Alpha items (recursively rendered)
+    if (sc.alpha_items && sc.alpha_items.length) {
+      html += renderSubList(sc.alpha_items, 0, scopePrefix);
+    }
+
+    // Cross-refs
+    if (sc.references && sc.references.length) html += renderRefs(sc.references);
+
+    div.innerHTML = html;
+    if (isDefinitionTableSection) div.appendChild(renderDefinitionsTable());
+    return div;
+  }
+
+  function renderDefinitionsTable() {
+    const wrap = document.createElement('div');
+    wrap.className = 'definitions-table-wrap';
+    const rows = Object.entries(defs).map(([term, body]) => {
+      const sourcePage = definitionSources[term];
+      const sourceLabel = typeof sourcePage === 'number'
+        ? `PDF p. ${sourcePage}`
+        : Array.isArray(sourcePage) ? `PDF pp. ${esc(sourcePage.join('–'))}`
+          : sourcePage ? `PDF pp. ${esc(sourcePage)}` : '';
+      return `
+        <tr>
+          <th scope="row">${highlight(esc(term), defTerms)}${sourceLabel ? `<span class="definition-source-page">${sourceLabel}</span>` : ''}</th>
+          <td>${formatDefinitionText(body, defTerms)}</td>
+        </tr>`;
+    }).join('');
+    wrap.innerHTML = `<table class="definitions-table">
+      <thead><tr><th scope="col">Term</th><th scope="col">Definition</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+    return wrap;
+  }
+
+  // ── Render Named Items grid ─────────────────────────────────────────────
+  function renderNamedItems(items, scopePrefix = '') {
+    let html = `<div class="named-items-grid">`;
+    items.forEach(ni => {
+      html += `<div class="named-item" id="card-nc-${esc(ni.nc)}">
+        <div class="named-item-header">
+          <span class="named-item-label">${esc(ni.title)}</span>
+          <span class="named-item-nc">${esc(ni.display_nc || ni.nc)}</span>
+          ${sourcePageBadge(ni)}
+        </div>
+        <div class="named-item-body">${formatContractText(ni.content || ni.paragraphs.join(' '), defTerms, scopePrefix)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  // ── Render cross-reference chips ────────────────────────────────────────
+  function renderRefs(refs) {
+    if (!refs || !refs.length) return '';
+    let html = `<div class="refs-row" style="margin-top:12px;">
+      <span style="font-size:11px;color:var(--text3);margin-right:4px;">refs →</span>`;
+    refs.forEach(r => {
+      html += `<span class="ref-chip" data-nc="${esc(r)}">${esc(r)}</span>`;
+    });
+    return html + `</div>`;
+  }
+
+  // ── Search ──────────────────────────────────────────────────────────────
+  const searchInput = document.getElementById('search');
+  const searchResults = document.getElementById('search-results');
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    if (!q) { hideSearch(); return; }
+    runSearch(q);
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { searchInput.value = ''; hideSearch(); searchInput.blur(); }
+    if (e.key === 'ArrowDown' && searchResults.classList.contains('visible')) {
+      const firstHit = searchResults.querySelector('.search-hit');
+      if (firstHit) { e.preventDefault(); firstHit.focus(); }
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+
+  function hideSearch() {
+    searchResults.classList.remove('visible');
+    searchResults.innerHTML = '';
+    if (currentViewState.type === 'search' && searchReturnState) {
+      const savedState = searchReturnState;
+      searchReturnState = null;
+      restoreNavigationState(savedState);
+    }
+  }
+
+  function runSearch(q) {
+    if (currentViewState.type !== 'search') searchReturnState = captureNavigationState();
+    currentViewState = { type: 'search', query: q };
+    closeRightDrawer();
+    document.getElementById('welcome').style.display = 'none';
+    document.getElementById('clause-view').innerHTML = '';
+
+    const qualifierMatch = String(q).match(/^(term|definition|clause|article|schedule)\s*:\s*(.*)$/i);
+    const qualifier = qualifierMatch ? qualifierMatch[1].toLowerCase() : '';
+    const query = normalizeSearchText(qualifierMatch ? qualifierMatch[2] : q);
+    if (!query) { searchResults.classList.remove('visible'); return; }
+    const displayQuery = qualifierMatch ? qualifierMatch[2] : q;
+    const filteredRecords = contractSearchIndex.filter(record => {
+      if (qualifier === 'term' || qualifier === 'definition') return record.type === 'definition';
+      if (qualifier === 'clause') return record.type === 'clause';
+      if (qualifier === 'article') return record.type === 'clause' && !/^sch[-.]/i.test(record.nc || '');
+      if (qualifier === 'schedule') return record.type === 'clause' && /^sch[-.]/i.test(record.nc || '');
+      return true;
+    });
+    const hits = filteredRecords.filter(record => record.searchable.includes(query)).map(record => {
+      const titleKey = normalizeSearchText(record.title);
+      const ncKey = normalizeSearchText(record.nc || '');
+      let score = 10;
+      if (titleKey === query) score = 120;
+      else if (ncKey === query) score = 115;
+      else if (titleKey.startsWith(query)) score = 80;
+      else if (titleKey.includes(query)) score = 55;
+      else if (record.type === 'definition') score = 35;
+      return { ...record, score };
+    }).sort((a, b) => b.score - a.score || String(a.title).localeCompare(String(b.title), undefined, { sensitivity: 'base' }));
+
+    const resultCount = hits.length;
+    searchResults.innerHTML = `<div class="search-help">${resultCount} result${resultCount !== 1 ? 's' : ''} for <strong>${esc(displayQuery)}</strong>. Search defined terms, clause text, headings and schedules; use <code>term:</code>, <code>clause:</code> or <code>schedule:</code> to narrow results.</div>`;
+    if (!hits.length) {
+      searchResults.innerHTML += '<div class="clause-outline-empty">No matches found. Check the spelling or remove the search filter.</div>';
+    } else {
+      hits.slice(0, 60).forEach(record => {
+        const excerptSource = record.body || record.title;
+        const rawNeedle = String(displayQuery || '').trim();
+        const hitAt = rawNeedle ? excerptSource.toLocaleLowerCase().indexOf(rawNeedle.toLocaleLowerCase()) : -1;
+        const startAt = hitAt > 95 ? hitAt - 95 : 0;
+        const excerpt = `${startAt ? '?' : ''}${excerptSource.slice(startAt, startAt + 260).trim()}${excerptSource.length > startAt + 260 ? '?' : ''}`;
+        const result = document.createElement('button');
+        result.type = 'button';
+        result.className = 'search-hit';
+        const location = record.type === 'definition' ? 'DEFINED TERM' : record.type === 'preamble' ? 'PREAMBLE' : `CLAUSE ${record.node.display_nc || record.node.id || record.nc}`;
+        const typeLabel = record.type === 'definition' ? 'Definition' : record.type === 'preamble' ? 'Preamble' : /^sch[-.]/i.test(record.nc || '') ? 'Schedule' : 'Clause';
+        const excerptHtml = excerpt ? markQ(esc(excerpt), rawNeedle) : '<span class="clause-outline-empty">No excerpt available.</span>';
+        result.innerHTML = `<div class="search-hit-nc">${esc(location)}<span class="search-hit-kind">${esc(typeLabel)}</span></div><div class="search-hit-title">${markQ(esc(record.title || record.nc), rawNeedle)}</div><div class="search-hit-excerpt">${excerptHtml}</div>`;
+        result.addEventListener('click', () => {
+          searchInput.value = '';
+          if (record.type === 'definition') {
+            hideSearch();
+            showDefinition(record.term);
+          } else if (record.type === 'preamble') {
+            hideSearch();
+            showPreamble();
+          } else {
+            showNC(record.nc);
+          }
+        });
+        searchResults.appendChild(result);
+      });
+      if (resultCount > 60) {
+        const note = document.createElement('div');
+        note.className = 'search-help';
+        note.textContent = `Showing the first 60 of ${resultCount} results. Add a word or a scope filter to narrow the list.`;
+        searchResults.appendChild(note);
+      }
+    }
+    searchResults.classList.add('visible');
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function markQ(html, q) {
+    if (!q) return html;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return html.replace(re, m => `<mark>${m}</mark>`);
+  }
+
+  function highlight(html, terms, scopePrefix = '') {
+    // 1. Highlight definitions
+    html = highlightDefsOnly(html, terms);
+    // 2. Highlight Clause/Section references
+    html = highlightRefs(html, scopePrefix);
+    return html;
+  }
+
+  function sentenceParts(text) {
+    if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+      return Array.from(new Intl.Segmenter('en', { granularity: 'sentence' }).segment(text), part => part.segment.trim()).filter(Boolean);
+    }
+    return (text.match(/[^.!?]+(?:[.!?]+["')\]]*|$)/g) || [text]).map(part => part.trim()).filter(Boolean);
+  }
+
+  function formatContractText(raw, terms, scopePrefix = '') {
+    const source = String(raw || '').replace(/\r\n?/g, '\n').trim();
+    if (!source) return '';
+    return source.split(/\n{2,}/).map(block => {
+      const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+      if (!lines.length) return '';
+      return lines.map(line => sentenceParts(line)
+        .map(part => highlight(esc(part), terms, scopePrefix)).join('<br>')).join('<br>');
+    }).filter(Boolean).join('<br><br>');
+  }
+
+  function formatDefinitionText(raw, terms) {
+    const source = String(raw || '').replace(/\r\n?/g, '\n').trim();
+    if (!source) return '';
+    const markerPattern = /(?:^|[\n;,:]\s*|\b(?:or|and)\s+)([a-z])\.\s+/gi;
+    const markers = [...source.matchAll(markerPattern)];
+    const isAlphaList = markers.length >= 2 && markers.every((marker, index) =>
+      marker[1].toLowerCase() === String.fromCharCode(97 + index)
+    );
+    if (!isAlphaList) return formatContractText(source, terms);
+
+    const starts = markers.map(marker => marker.index + marker[0].lastIndexOf(`${marker[1]}.`));
+    const intro = source.slice(0, starts[0]).trim();
+    const items = markers.map((marker, index) => {
+      const end = starts[index + 1] ?? source.length;
+      return source.slice(starts[index], end)
+        .replace(/^[a-z]\.\s+/i, '')
+        .replace(/[\s;,]+(?:(?:or|and)\s*)?$/i, '')
+        .trim();
+    });
+
+    const introHtml = intro ? `<div class="definition-intro">${formatContractText(intro, terms)}</div>` : '';
+    const itemsHtml = `<ol class="definition-enumeration" type="a">${items.map(item => `<li>${formatContractText(item, terms)}</li>`).join('')}</ol>`;
+    return introHtml + itemsHtml;
+  }
+
+  function formatPreamble(raw, terms) {
+    const lines = String(raw || '').replace(/\r\n?/g, '\n').split('\n').map(line => line.trim()).filter(Boolean);
+    const narrativeStart = lines.findIndex(line => /^This Agreement is intended to be read as/i.test(line));
+    const contentsIndex = lines.findIndex(line => /^CONTENTS$/i.test(line));
+    if (narrativeStart < 0 || contentsIndex <= narrativeStart) return formatContractText(raw, terms);
+
+    const html = [];
+    const frontmatter = lines.slice(0, narrativeStart);
+    if (frontmatter.length) {
+      html.push(`<div class="preamble-frontmatter">${frontmatter.map(line => highlight(esc(line), terms)).join('<br>')}</div>`);
+    }
+
+    const narrative = lines.slice(narrativeStart, contentsIndex).join(' ');
+    if (narrative) html.push(`<p class="preamble-paragraph">${formatContractText(narrative, terms)}</p>`);
+
+    const tocLines = lines.slice(contentsIndex + 1);
+    const tocRows = [];
+    let current = null;
+    const flushRow = () => {
+      if (!current) return;
+      const title = current.title.join(' ').trim();
+      tocRows.push(`<div class="preamble-toc-row"><span class="preamble-toc-id">${esc(current.id)}</span><span>${highlight(esc(title), terms)}</span></div>`);
+      current = null;
+    };
+    tocLines.forEach(line => {
+      const marker = line.match(/^(Article|Schedule)\s+([\dIVX]+)\s*$/i);
+      if (marker) {
+        flushRow();
+        current = { id: `${marker[1]} ${marker[2]}`, title: [] };
+      } else if (current) {
+        current.title.push(line);
+      }
+    });
+    flushRow();
+    html.push(`<div class="preamble-contents"><div class="preamble-contents-title">CONTENTS</div>${tocRows.join('')}</div>`);
+    return html.join('');
+  }
+
+  function highlightDefsOnly(html, terms) {
+    if (!terms || !terms.length) return html;
+    const sortedTerms = [...terms].filter(t => t.length > 2 && t.length < 60);
+    sortedTerms.sort((a, b) => b.length - a.length);
+    
+    sortedTerms.forEach(term => {
+      const escapedTerm = esc(term);
+      const re = new RegExp(`\\b${escRe(escapedTerm)}\\b(?![^<]*>)`, 'gi');
+      html = html.replace(re, m => {
+        // Enforce capitalization check: Only highlight if the matched string starts with a capital letter (A-Z)
+        if (/^[A-Z]/.test(m)) {
+          return `<span class="def-highlight" onclick="window.showDefinition('${escapedTerm.replace(/'/g, "\\'")}')" title="${escapedTerm}: ${esc((defs[term]||'').slice(0,120))}">${m}</span>`;
+        }
+        return m;
+      });
+    });
+    return html;
+  }
+
+  function highlightRefs(html, scopePrefix = '') {
+    const re = /\b(Clause|Section|Article|Schedule)\s+([\d.]+)(?:\s*\(([a-zA-Z0-9]+)\))?(?:\s*\(([a-zA-Z0-9]+)\))?(?:\s*\(([a-zA-Z0-9]+)\))?(?!\w)(?![^<]*>)/gi;
+    const roman = {1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI',7:'VII',8:'VIII',9:'IX',10:'X'};
+    return html.replace(re, (match, prefix, id, sub1, sub2, sub3) => {
+      let cleanId = id.trim();
+      if (cleanId.endsWith('.')) cleanId = cleanId.slice(0, -1);
+      if (prefix.toLowerCase() === 'schedule') {
+        const scheduleNc = `Sch-${roman[Number(cleanId)] || ''}`;
+        return nc_index[scheduleNc] ? `<span class="ref-highlight" data-nc="${esc(scheduleNc)}">${match}</span>` : match;
+      }
+      const pathParts = [cleanId];
+      if (sub1) pathParts.push(sub1.toLowerCase());
+      if (sub2) pathParts.push(sub2.toLowerCase());
+      if (sub3) pathParts.push(sub3.toLowerCase());
+      const keys = Object.keys(nc_index);
+      let duplicate = null;
+      for (let i=pathParts.length; i>=1; i--) {
+        const printed = pathParts.slice(0,i).join('.');
+        const scopedPrinted = scopePrefix ? `${scopePrefix}${printed}` : printed;
+        if (duplicateRefs[scopedPrinted]) { duplicate = scopedPrinted; break; }
+        if (duplicateRefs[printed]) { duplicate = printed; break; }
+      }
+      if (duplicate) return `<span class="ref-ambiguous" data-ref="${esc(duplicate)}" title="Repeated printed clause number">${match}</span>`;
+      const trialNc = pathParts.join('.');
+      const scopedTrialNc = scopePrefix ? `${scopePrefix}${trialNc}` : trialNc;
+      let targetNc = nc_index[scopedTrialNc] ? scopedTrialNc : (nc_index[trialNc] ? trialNc : keys.find(k => k.toLowerCase() === trialNc.toLowerCase()));
+      if (!targetNc) {
+        for (let i=pathParts.length-1; i>=1; i--) {
+          const subTrial = pathParts.slice(0,i).join('.');
+          const scopedSubTrial = scopePrefix ? `${scopePrefix}${subTrial}` : subTrial;
+          const subMatch = nc_index[scopedSubTrial] ? scopedSubTrial : keys.find(k => k.toLowerCase() === subTrial.toLowerCase());
+          if (subMatch) { targetNc = subMatch; break; }
+        }
+      }
+      return targetNc ? `<span class="ref-highlight" data-nc="${esc(targetNc)}">${match}</span>` : match;
+    });
+  }
+
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  // Remove Article/Section headers prefixes in TOC listing
+  function stripArticle(title, id) {
+    return title.replace(/^(Article|Section|Clause|Part)\s+[\d.A-Z]+\.?\s*/i, '').trim() || title;
+  }
+
+  function sourcePageBadge(node) {
+    const pages = [...new Set((node?.source_pages || []).map(Number).filter(Number.isFinite))].sort((a, b) => a - b);
+    if (!pages.length) return '';
+    const consecutive = pages.every((page, index) => index === 0 || page === pages[index - 1] + 1);
+    const label = pages.length === 1 ? `PDF p. ${pages[0]}` : consecutive
+      ? `PDF pp. ${pages[0]}–${pages[pages.length - 1]}`
+      : `PDF pp. ${pages.join(', ')}`;
+    return `<span class="source-page-badge" title="Source PDF page" style="margin-left:auto;font-size:10px;color:var(--text3);white-space:nowrap;border:1px solid var(--border);padding:2px 6px;border-radius:999px">${esc(label)}</span>`;
+  }
+
+  // ── Sidebar Resizer Logic ───────────────────────────────────────────────
+  const resizer = document.getElementById('sidebar-resizer');
+  const topPanel = document.getElementById('sidebar-clauses');
+  const bottomPanel = document.getElementById('sidebar-definitions');
+  const sidebar = document.getElementById('sidebar');
+
+  if (resizer && topPanel && bottomPanel && sidebar) {
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', function(e) {
+      isResizing = true;
+      resizer.classList.add('is-resizing');
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault(); // Prevent default text selection start
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isResizing) return;
+      const sidebarRect = sidebar.getBoundingClientRect();
+      
+      // Calculate top height (with a min and max constraint)
+      let newTopHeight = e.clientY - sidebarRect.top;
+      if (newTopHeight < 60) newTopHeight = 60;
+      if (newTopHeight > sidebarRect.height - 60) newTopHeight = sidebarRect.height - 60;
+      
+      const totalHeight = sidebarRect.height;
+      const topPercentage = (newTopHeight / totalHeight) * 100;
+      const bottomPercentage = 100 - topPercentage;
+      
+      // Apply new flex-basis (subtracting half of the resizer height 3px to fit exactly)
+      topPanel.style.flex = `0 0 calc(${topPercentage}% - 3px)`;
+      bottomPanel.style.flex = `0 0 calc(${bottomPercentage}% - 3px)`;
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (isResizing) {
+        isResizing = false;
+        resizer.classList.remove('is-resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    });
+  }
+
+  // ── Auto-open first item (Full Contract if exists, else first clause) ───
+  if (D.preamble || clauses.length) {
+    showFullContract();
+  } else if (clauses.length) {
+    showNC(clauses[0].nc);
+  }
+
+})();
+</script>
+</body>
+</html>

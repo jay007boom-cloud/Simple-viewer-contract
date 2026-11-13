@@ -1,0 +1,108 @@
+{
+  "git_revision": "Rev.0",
+  "local_source_revision": "_Rev2.2",
+  "description": "Saved program version before the Astra enhancements. No later program changes included.",
+  "files": [
+    {
+      "path": "Build-ContractReader.ps1",
+      "sha256": "d47f07610e792eece1e102bc4211635b3fc99777d78795df45261f22873ab0fc",
+      "bytes": 1152
+    },
+    {
+      "path": "Build-ContractViewer.ps1",
+      "sha256": "4871d9d936d146170fb572cd074f9f098021d41169316bd47a06b0856c09d2ba",
+      "bytes": 5999
+    },
+    {
+      "path": "build_contract_viewer.py",
+      "sha256": "addfdd307ff3d60f2c42116d25b3709540fcc9a90e776603005accb8374b736f",
+      "bytes": 22390
+    },
+    {
+      "path": "Convert-LegacyDoc.ps1",
+      "sha256": "581c682b035f7594241bca2fb03f2e9a264a76af973af37cc79e6ca65f3a7da1",
+      "bytes": 812
+    },
+    {
+      "path": "inspect_pdf.py",
+      "sha256": "fa65c25487271dae19449688b68da610b02348d93c5e0acdc3b159324ea16981",
+      "bytes": 874
+    },
+    {
+      "path": "Launch-Reader.ps1",
+      "sha256": "e285e7ce43a7be25c4a8e9ac195ffd16069d1a0fb36cba1c4cf413b4b25b49fa",
+      "bytes": 637
+    },
+    {
+      "path": "launcher.py",
+      "sha256": "c783c63ef3aa4bb13d2e6bf0f70a74aa40b9b9433760dcf1993b969aed28325d",
+      "bytes": 18258
+    },
+    {
+      "path": "merge_reviewed_schedules.py",
+      "sha256": "e452f0d6728775fe61d7b44a5b72fbeff2858349ba7c2eb62a72853f8d0a192e",
+      "bytes": 2518
+    },
+    {
+      "path": "OneStop-Contract.ps1",
+      "sha256": "09a3e6119a4efd078cdea259a8c920a0a7a7bba793d60c9fc4a386d6243da4a8",
+      "bytes": 12162
+    },
+    {
+      "path": "Open-ContractViewer.ps1",
+      "sha256": "c8f1526a3bdfa528cf551db3aa75dd2b50ca1861e872c45953703e124eba71b6",
+      "bytes": 7653
+    },
+    {
+      "path": "parse_contract_md.py",
+      "sha256": "15ee26245f5d6c4019ae32183e17afa500fdc9e35153b0b7e398b5393752aa6c",
+      "bytes": 20247
+    },
+    {
+      "path": "Process-Contract.ps1",
+      "sha256": "62d094c677d7a1a763ef3127744853ff9bb4d2fed51445674a24c7c619f5e02c",
+      "bytes": 15991
+    },
+    {
+      "path": "requirements-build.txt",
+      "sha256": "06a1e0d6cc0876ebf7ef5aafab02804725711d6d022dbe5c300c5bce7a074ae8",
+      "bytes": 32
+    },
+    {
+      "path": "requirements-mineru.txt",
+      "sha256": "1c17154c06fed9ecf28226de6c572e85f41309b3a180dc2544223c9db1285d95",
+      "bytes": 104
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "9e7085581cf6bb500bb9f4346f942df2e749713cf6e5c317ba853bc3440d763f",
+      "bytes": 41
+    },
+    {
+      "path": "Set-GoogleTTSKey.ps1",
+      "sha256": "01de1fd855b6aef69f75f6671aab717c09a4bcf6d465223467808f7965aed61e",
+      "bytes": 1606
+    },
+    {
+      "path": "Setup-MinerU.ps1",
+      "sha256": "d1d20614b8f66d56209d1ad2fa6c50d8b3b6e4adf21aad62c64853f7e438102a",
+      "bytes": 2965
+    },
+    {
+      "path": "contract_viewer.html",
+      "sha256": "124612655a638fb4450745063e53b0a0df2a3600b3445d086d4c4255b847b507",
+      "bytes": 201734
+    },
+    {
+      "path": "ContractViewer_Rev22.exe",
+      "sha256": "a1da82662d0163ab2b0241a861d18f263a9c63badf3110bf625cf10d18760ebc",
+      "bytes": 10341928
+    },
+    {
+      "path": "Runtime/google_ai_server.py",
+      "sha256": "68b4366cdd3ecbfe76b73214caf249e5827ea1a50e26473da953a10ae0486fb3",
+      "bytes": 20716
+    }
+  ],
+  "excluded": "Private contract workspaces, extracted data, user keys, logs and local build caches."
+}
